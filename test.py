@@ -24,6 +24,7 @@ import zipfile
 from torchvision import transforms
 from PIL import Image
 from torchvision.transforms import ToTensor
+from skimage.segmentation import find_boundaries
 
 
 
@@ -76,17 +77,21 @@ def yolo_bbox():
     model = YOLO('yolov8n.pt')  # pretrained YOLOv8n model
 
     # Run batched inference on a list of images
-    results = model([r'C:\Data\Research\work\StereoVision\test_pics\bottle.jpg'])  # return a list of Results objects
+    results = model([r'C:\Data\Research\work\StereoVision\test_pics\elephant.png'])  # return a list of Results objects
 
     # Process results list
     for result in results:
         boxes = result.boxes  # Boxes object for bounding box outputs
+        classid = result.boxes.cls
+        print(classid)
+        trackid = result.boxes.id
+        print(trackid)
         # print(boxes)
-        print(type(boxes.xywh))
+        # print(type(boxes.xywh))
         masks = result.masks  # Masks object for segmentation masks outputs
         keypoints = result.keypoints  # Keypoints object for pose outputs
         probs = result.probs  # Probs object for classification outputs
-        result.show()  # display to screen
+        # result.show()  # display to screen
         # result.save(filename='result' + result.path)  # save to disk
 
 
@@ -380,7 +385,7 @@ if __name__ == '__main__':
     # print("Detected cameras:", cameras)
     # get_image_border()
     # nonzero_elements()
-    # yolo_bbox()
+    yolo_bbox()
     # np_nonzero()
     # test_segmentation()
-    read_npy(r'C:\Data\Research\work\StereoVision\results\Q.npy')
+    # read_npy(r'C:\Data\Research\work\StereoVision\results\Q.npy')
