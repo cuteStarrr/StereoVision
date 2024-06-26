@@ -370,11 +370,48 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
 
         if target_bbox_left is not None and target_bbox_right is not None:
             if target_classid_left == target_classid_right:
+                # left bbox
+                plt.figure(figsize=(10, 10))
+                plt.imshow(left_nice)
+                # show_mask(masks[0], plt.gca())
+                show_box(target_bbox_left, plt.gca())
+                plt.title("target bbox left")
+                plt.axis('off')
+                plt.show()
+
+                # right bbox
+                plt.figure(figsize=(10, 10))
+                plt.imshow(right_nice)
+                # show_mask(masks[0], plt.gca())
+                show_box(target_bbox_right, plt.gca())
+                plt.title("target bbox right")
+                plt.axis('off')
+                plt.show()
+
                 start_time = time.time()
 
                 cropped_image_left, cropped_image_right = get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, right_nice)
                 mask_left = get_mask(predictor=predictor, image=cropped_image_left)
                 mask_right = get_mask(predictor=predictor, image=cropped_image_right)
+
+                # left mask
+                plt.figure(figsize=(10, 10))
+                plt.imshow(left_nice)
+                show_mask(mask_left, plt.gca())
+                # show_box(target_bbox_left, plt.gca())
+                plt.title("target mask left")
+                plt.axis('off')
+                plt.show()
+
+                # right mask
+                plt.figure(figsize=(10, 10))
+                plt.imshow(right_nice)
+                show_mask(mask_right, plt.gca())
+                # show_box(target_bbox_left, plt.gca())
+                plt.title("target mask right")
+                plt.axis('off')
+                plt.show()
+
                 if flag_edge_match > 0: # 只进行边缘匹配
                     boundary_left = find_boundaries(mask_left, mode='inner').astype(np.uint8)
                     boundary_right = find_boundaries(mask_right, mode='inner').astype(np.uint8)
@@ -401,6 +438,11 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
             print("Detect NO Target! Compute whole image!")
             points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(left_nice, right_nice, stereo, stereoR, wls_filter, Q)
             Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y)
+
+
+        end_time = time.time()
+
+        print("spending time: ", end_time - start_time)
 
 
 def coords_mouse_disp(event,x,y,flags,param):
