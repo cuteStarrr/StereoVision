@@ -42,6 +42,8 @@ Q_file=os.path.join(save_folder, 'Q.npy')
 checker_size = 15 # 方格边长15mm 
 checkerboard_start_num = 0 # 标定图片的开始序号
 checkerboard_end_num = 101 # 标定图片的结束序号
+weight_path_yolo = r"C:\Data\Research\work\weights\yolov8n.pt" # yolo的权重地址
+weight_path_efficientvitSAM = r"C:\Data\Research\work\weights\efficientvit_sam_l0.pt" # efficientsam的权重地址
 
 """
 以下是用于计算距离的超参数 一般不更改
@@ -652,10 +654,10 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
     Q = np.load(Q_file)
 
     # Load a model
-    model = YOLO(r'weights/yolov8n.pt')  # pretrained YOLOv8n model
+    model = YOLO(weight_path_yolo)  # pretrained YOLOv8n model
 
     efficientvit_sam = create_sam_model(
-    name="l0", weight_url=r"C:\Data\Research\work\StereoVision\efficientvit\assets\checkpoints\sam\l0.pt",
+    name="l0", weight_url=weight_path_efficientvitSAM,
     )
     efficientvit_sam = efficientvit_sam.eval()
     efficientvit_sam_predictor = EfficientViTSamPredictor(efficientvit_sam)
