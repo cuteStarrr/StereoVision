@@ -5,7 +5,7 @@
 Clone repo:
 
 ```
-git clone https://github.com/blueeeeeeeee/StereoVision.git
+git clone --recurse-submodules https://github.com/cuteStarrr/StereoVision.git
 cd StereoVision
 ```
 
