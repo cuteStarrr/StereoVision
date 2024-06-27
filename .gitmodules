@@ -1,1 +1,4 @@
 
+[submodule "efficientvit"]
+	path = efficientvit
+	url = https://github.com/mit-han-lab/efficientvit.git
