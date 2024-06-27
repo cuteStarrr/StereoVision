@@ -1,0 +1,9 @@
+[submodule "efficientvit"]
+	path = efficientvit
+	url = https://github.com/mit-han-lab/efficientvit.git
+[submodule "EfficientSAM"]
+	path = EfficientSAM
+	url = https://github.com/yformer/EfficientSAM.git
+[submodule "FastSAM"]
+	path = FastSAM
+	url = https://github.com/CASIA-IVA-Lab/FastSAM.git
