@@ -41,7 +41,7 @@ right_map_file=os.path.join(save_folder, 'Right_Stereo_Map.npz')
 Q_file=os.path.join(save_folder, 'Q.npy')
 checker_size = 15 # 方格边长15mm 
 checkerboard_start_num = 0 # 标定图片的开始序号
-checkerboard_end_num = 102 # 标定图片的结束序号
+checkerboard_end_num = 101 # 标定图片的结束序号
 
 """
 以下是用于计算距离的超参数 一般不更改
@@ -277,22 +277,28 @@ def get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, ri
     """
     x0_left, y0_left, x1_left, y1_left = target_bbox_left[0], target_bbox_left[1], target_bbox_left[2], target_bbox_left[3]
     x0_right, y0_right, x1_right, y1_right = target_bbox_right[0], target_bbox_right[1], target_bbox_right[2], target_bbox_right[3]
+
+    # print("target_bbox_left: ", target_bbox_left)
+    # print("target_bbox_right: ", target_bbox_right)
     
     x0_target = min(x0_left, x0_right)
     y0_target = min(y0_left, y0_right)
     x1_target = max(x1_left, x1_right)
     y1_target = max(y1_left, y1_right)
 
-    cropped_image_left = left_nice[y0_target: y1_target, x0_target, x1_target]
-    cropped_image_right = right_nice[y0_target: y1_target, x0_target, x1_target]
+    # print(x0_target, y0_target, x1_target, y1_target)
 
-    return cropped_image_left, cropped_image_right
+    cropped_image_left = left_nice[y0_target: y1_target, x0_target:x1_target]
+    cropped_image_right = right_nice[y0_target: y1_target, x0_target:x1_target]
+
+    return cropped_image_left, cropped_image_right, (x0_target, y0_target, x1_target, y1_target)
 
 
-def get_mask(predictor, image):
+def get_mask(predictor, image, bbox = None):
     predictor.set_image(image)
-    h,w = image.shape
-    bbox = np.array([0, 0, w-1, h-1])
+    if bbox is None:
+        h,w,c = image.shape
+        bbox = np.array([0, 0, w-1, h-1])
     target_mask, _, _ = predictor.predict(
         point_coords=None,
         point_labels=None,
@@ -334,15 +340,16 @@ def getDepth_stereoSGBM_WLSFilter(image_left, image_right, stereo, stereoR, wls_
     return points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y
 
 
-def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match = None, boundary_left = None, mask_left = None, image_shape = None, flag_normal = True):
+def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match = None, boundary_left = None, mask_left = None, image_shape = None, flag_normal = False):
     print("y: ", y, "x: ", x, "Distance not filter: ", points_depth[y,x])
     print("y: ", y, "x: ", x, "Distance using filter: ", filtered_points_depth[y,x])
     print("y: ", y, "x: ", x, "x not filter: ", points_x[y,x])
     print("y: ", y, "x: ", x, "x using filter: ", filtered_points_x[y,x])
     print("y: ", y, "x: ", x, "y not filter: ", points_y[y,x])
     print("y: ", y, "x: ", x, "y using filter: ", filtered_points_y[y,x])
-    window = np.zeros(image_shape)
-    window[y-target_window:y+target_window, x-target_window:x+target_window] = 1
+    h,w = points_depth.shape
+    window = np.zeros((h,w))
+    window[max(y-target_window, 0):min(y+target_window, h), max(x-target_window, 0):min(x+target_window, w)] = 1
     print("depth using window: ", get_depth_specific_area(filtered_points_depth, window))
     if flag_normal:
         if flag_edge_match:
@@ -352,8 +359,15 @@ def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, f
 
 
 def get_depth_specific_area(filtered_points_depth, specific_area):
-    return filtered_points_depth[np.nonzero(specific_area)].mean()
+    specific_area_points = filtered_points_depth[np.nonzero(specific_area)]
+    specific_area_points = specific_area_points[specific_area_points > 0]
+    return specific_area_points.mean()
 
+
+def cropped_mask_bbox(mask, bbox):
+    # bbox - xyxy
+    x0_target, y0_target, x1_target, y1_target = bbox
+    return mask[y0_target: y1_target, x0_target:x1_target]
 
 def mouseClick_bbox_disp(event,x,y,flags,param):
     # print(type(target_bbox))
@@ -388,15 +402,17 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 plt.axis('off')
                 plt.show()
 
-                start_time = time.time()
+                # start_time = time.time()
 
-                cropped_image_left, cropped_image_right = get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, right_nice)
-                mask_left = get_mask(predictor=predictor, image=cropped_image_left)
-                mask_right = get_mask(predictor=predictor, image=cropped_image_right)
+                cropped_image_left, cropped_image_right, target_bbox = get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, right_nice)
+                mask_left = cropped_mask_bbox(get_mask(predictor=predictor, image=left_nice, bbox=target_bbox_left), target_bbox)
+                mask_right = cropped_mask_bbox(get_mask(predictor=predictor, image=right_nice, bbox=target_bbox_right), target_bbox)
+                y = y - target_bbox[1]
+                x = x - target_bbox[0]
 
                 # left mask
                 plt.figure(figsize=(10, 10))
-                plt.imshow(left_nice)
+                plt.imshow(cropped_image_left)
                 show_mask(mask_left, plt.gca())
                 # show_box(target_bbox_left, plt.gca())
                 plt.title("target mask left")
@@ -405,7 +421,7 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
 
                 # right mask
                 plt.figure(figsize=(10, 10))
-                plt.imshow(right_nice)
+                plt.imshow(cropped_image_right)
                 show_mask(mask_right, plt.gca())
                 # show_box(target_bbox_left, plt.gca())
                 plt.title("target mask right")
@@ -415,20 +431,25 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 if flag_edge_match > 0: # 只进行边缘匹配
                     boundary_left = find_boundaries(mask_left, mode='inner').astype(np.uint8)
                     boundary_right = find_boundaries(mask_right, mode='inner').astype(np.uint8)
-                    image_left = np.where(boundary_left, cropped_image_left, 0)
-                    image_right = np.where(boundary_right, cropped_image_right, 0)
-                else: # 全图匹配
-                    image_left, image_right = cropped_image_left, cropped_image_right
+                    cropped_image_left[boundary_left > 0] = 0
+                    cropped_image_right[boundary_right > 0] = 0
+                    # image_left = np.where(boundary_left, cropped_image_left, 0)
+                    # image_right = np.where(boundary_right, cropped_image_right, 0)
+                else: # cropped image匹配
+                    boundary_left = None
+                    boundary_right = None
+                
+                image_left, image_right = cropped_image_left, cropped_image_right
                 
                 if flag_method == 0: # 采用SGBM + WLS Filter
                     points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(image_left, image_right, stereo, stereoR, wls_filter, Q)
-                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape)
+                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape, True)
                 elif flag_method == 1: # 采用方法Belief Propagation (BP) (CUDA)
                     points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_BP_CSBP(image_left, image_right, wls_filter, Q)
-                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape)
+                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape, True)
                 elif flag_method == 2: # Constant Space Belief Propagation (CSBP) (CUDA)
                     points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_BP_CSBP(image_left, image_right, wls_filter, Q, False)
-                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape)
+                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape, True)
             else:
                 print("Target object not detected simultaneously in both left and right images!")
                 points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(left_nice, right_nice, stereo, stereoR, wls_filter, Q)
@@ -440,9 +461,9 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
             Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y)
 
 
-        end_time = time.time()
+        # end_time = time.time()
 
-        print("spending time: ", end_time - start_time)
+        # print("spending time: ", end_time - start_time)
 
 
 def coords_mouse_disp(event,x,y,flags,param):
@@ -613,7 +634,7 @@ def get_StereoSGBM_WLSFilter():
 
 
 
-def disparity_calculation(left_map_file, right_map_file, image_height, image_width, Q_file, flag_method):
+def disparity_calculation(left_map_file, right_map_file, image_height, image_width, Q_file, flag_method, flag_edge_match):
     #*************************************
     #***** Starting the StereoVision *****
     #*************************************
@@ -663,8 +684,8 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
         # Left_nice_small = cv2.resize(Left_nice, (image_width / 4, image_height / 2))
         # Right_nice_small = cv2.resize(Right_nice, (image_width / 4, image_height / 2))
         # Run batched inference on a list of images
-        result_left = model(left_nice)  # return a list of Results objects
-        result_right = model(right_nice)
+        result_left = model(left_nice, verbose=False)  # return a list of Results objects
+        result_right = model(right_nice, verbose=False)
         # result = model(Left_nice_small)
         # print(type(result))
         bboxes_left = ((result_left[0].boxes.xyxy).int()).detach().numpy()
@@ -724,8 +745,6 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
         # cv2.imshow('Disparity Filtered', dsp_filtered8)
         # cv2.imshow('Filtered Color Depth',filt_Color)
 
-
-        flag_edge_match = False
         # Mouse click
         cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, stereo, stereoR, wls_filter, efficientvit_sam_predictor))
         # cv2.setMouseCallback("Left_nice_small", coords_mouse_disp, (points_depth, filtered_points_depth, grayL.shape, bboxes, Left_nice_small, efficientvit_sam_predictor, points_x, points_y, filtered_points_x, filtered_points_y))
@@ -742,5 +761,5 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
 
 
 if __name__ == "__main__":
-    stereo_calibration(checkerboard_long,checkerboard_short,checker_size,checkerboard_start_num, checkerboard_end_num, pics_folder, save_folder)
-    disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0) # flag_method: 0 - stereo_SGBM
+    # stereo_calibration(checkerboard_long,checkerboard_short,checker_size,checkerboard_start_num, checkerboard_end_num, pics_folder, save_folder)
+    disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0, flag_edge_match = True) # flag_method: 0 - stereo_SGBM
