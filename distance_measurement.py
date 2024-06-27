@@ -652,7 +652,7 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
     Q = np.load(Q_file)
 
     # Load a model
-    model = YOLO('yolov8n.pt')  # pretrained YOLOv8n model
+    model = YOLO(r'weights/yolov8n.pt')  # pretrained YOLOv8n model
 
     efficientvit_sam = create_sam_model(
     name="l0", weight_url=r"C:\Data\Research\work\StereoVision\efficientvit\assets\checkpoints\sam\l0.pt",
