@@ -373,7 +373,7 @@ def show_anns_ours(mask, ax):
     ax.imshow(img)
 
 
-def read_npy(file_path):
+def read_npy_npz(file_path):
     npzfile = np.load(file_path)
 
     # 列出文件中所有的数组名称
@@ -400,6 +400,8 @@ if __name__ == '__main__':
     # yolo_bbox()
     # np_nonzero()
     # test_segmentation()
-    # read_npy(r'C:\Data\Research\work\StereoVision\results\Q.npy')
-    cv2_cuda()
+    read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Q.npy')
+    # read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Left_Stereo_Map.npz')
+    # read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Right_Stereo_Map.npz')
+    # cv2_cuda()
     # torch_cuda()
