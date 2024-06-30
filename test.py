@@ -1,7 +1,7 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import sys
-sys.path.append(r'C:\Data\Research\work\StereoVision\efficientvit')
+sys.path.append(r'D:\Code\StereoDepthEstimation\StereoVision\efficientvit')
 
 from efficientvit.sam_model_zoo import create_sam_model
 from efficientvit.models.efficientvit.sam import EfficientViTSamPredictor
@@ -15,11 +15,11 @@ from ultralytics import YOLO
 # from skimage.segmentation import active_contour
 # from scipy.ndimage import binary_fill_holes
 import matplotlib.pyplot as plt
-from FastSAM.fastsam import FastSAM, FastSAMPrompt
+# from FastSAM.fastsam import FastSAM, FastSAMPrompt
 # from segment_anything import sam_model_registry, SamPredictor
-from mobile_sam import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+# from mobile_sam import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
 import time
-from EfficientSAM.efficient_sam.build_efficient_sam import build_efficient_sam_vitt, build_efficient_sam_vits
+# from EfficientSAM.efficient_sam.build_efficient_sam import build_efficient_sam_vitt, build_efficient_sam_vits
 import zipfile
 from torchvision import transforms
 from PIL import Image
@@ -380,12 +380,26 @@ def read_npy(file_path):
     print(npzfile)
 
 
+def cv2_cuda():
+    print(cv2.__version__)
+    # print(cv2.has_cuda)
+    print(cv2.cuda.getCudaEnabledDeviceCount())
+
+
+def torch_cuda():
+    print(torch.__version__)
+    print(torch.cuda.is_available())
+
+
+
 if __name__ == '__main__':
     # cameras = list_cameras()
     # print("Detected cameras:", cameras)
     # get_image_border()
     # nonzero_elements()
-    yolo_bbox()
+    # yolo_bbox()
     # np_nonzero()
     # test_segmentation()
     # read_npy(r'C:\Data\Research\work\StereoVision\results\Q.npy')
+    cv2_cuda()
+    # torch_cuda()

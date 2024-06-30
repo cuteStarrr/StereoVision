@@ -4,7 +4,7 @@ import sys
 """
 需要更改为自己的路径
 """
-sys.path.append(r'C:\Data\Research\work\StereoVision\efficientvit')
+sys.path.append(r'D:\Code\StereoDepthEstimation\StereoVision\efficientvit')
 
 # Package importation
 import numpy as np
@@ -34,16 +34,17 @@ image_width = 2160 # 视频流图像的宽度（两张一起）
 image_height = 1080 # 视频流图像的高度
 checkerboard_long = 11 # 标定板的宽度上有多少个角点
 checkerboard_short = 8 # # 标定板的高度上有多少个角点
-pics_folder = "C:\\Data\\Research\\work\\StereoVision\\checkerboard\\" # 拍照文件目录
-save_folder = r"C:\Data\Research\work\StereoVision\results" # 存放相机参数目录
+pics_folder = r"D:\Code\StereoDepthEstimation\StereoVision\checkerboard" # 拍照文件目录
+save_folder = r"D:\Code\StereoDepthEstimation\StereoVision\results" # 存放相机参数目录
 left_map_file=os.path.join(save_folder, 'Left_Stereo_Map.npz')
 right_map_file=os.path.join(save_folder, 'Right_Stereo_Map.npz')
 Q_file=os.path.join(save_folder, 'Q.npy')
 checker_size = 15 # 方格边长15mm 
 checkerboard_start_num = 0 # 标定图片的开始序号
 checkerboard_end_num = 101 # 标定图片的结束序号
-weight_path_yolo = r"C:\Data\Research\work\weights\yolov8n.pt" # yolo的权重地址
-weight_path_efficientvitSAM = r"C:\Data\Research\work\weights\efficientvit_sam_l0.pt" # efficientsam的权重地址
+weight_path_yolo = r"D:\Code\StereoDepthEstimation\weights\yolov8n.pt" # yolo的权重地址
+weight_path_efficientvitSAM = r"D:\Code\StereoDepthEstimation\weights\efficientvit_sam_l0.pt" # efficientsam的权重地址
+camera_id = 1 # 相机编号
 
 """
 以下是用于计算距离的超参数 一般不更改
@@ -375,7 +376,7 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
     # print(type(target_bbox))
     # print(target_bbox.shape)
     if event == cv2.EVENT_LBUTTONDBLCLK:
-        bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, stereo, stereoR, wls_filter, predictor = param
+        bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, wls_filter, predictor, stereo, stereoR = param
 
         # 这里的通道转换可能需要改动
         left_nice = cv2.cvtColor(left_nice, cv2.COLOR_BGR2RGB)
@@ -594,7 +595,7 @@ def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, chec
 
 
 
-def get_StereoSGBM_WLSFilter():
+def get_StereoSGBM():
     # Create StereoSGBM and prepare all parameters
     window_size = 3
     min_disp = 0
@@ -621,6 +622,10 @@ def get_StereoSGBM_WLSFilter():
     # Used for the filtered image
     stereoR=cv2.ximgproc.createRightMatcher(stereo) # Create another stereo for right this time
 
+    return stereo, stereoR
+
+
+def get_WLSFilter(stereo):
     # WLS FILTER Parameters
     lmbda = 80000
     sigma = 1.8
@@ -632,7 +637,7 @@ def get_StereoSGBM_WLSFilter():
     wls_filter.setLambda(lmbda)
     wls_filter.setSigmaColor(sigma)
 
-    return stereo, stereoR, wls_filter
+    return wls_filter
 
 
 
@@ -642,7 +647,7 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
     #*************************************
 
     # Call the two cameras
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(camera_id)
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, image_width)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, image_height)
 
@@ -707,9 +712,14 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
 
         # Compute the 2 images for the Depth_image
         if flag_method == 0: # StereoSGBM_WLSFilter
-            stereo, stereoR, wls_filter = get_StereoSGBM_WLSFilter()
-
+            stereo, stereoR = get_StereoSGBM()
+        elif flag_method == 1:
+            stereo = cv2.cuda.createStereoBeliefPropagation(numDisparities=16)
+        elif flag_method == 2:
+            stereo = cv2.cuda.createStereoConstantSpaceBP(numDisparities=16)
         
+        wls_filter = get_WLSFilter(stereo)
+
         # disp= stereo.compute(grayL,grayR)#.astype(np.float32)/ 16
 
         # points_depth, points_x, points_y = get_depth(disp, Q, 16, True)
@@ -748,7 +758,10 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
         # cv2.imshow('Filtered Color Depth',filt_Color)
 
         # Mouse click
-        cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, stereo, stereoR, wls_filter, efficientvit_sam_predictor))
+        if flag_method == 0:
+            cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, wls_filter, efficientvit_sam_predictor, stereo, stereoR))
+        else:
+            cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, wls_filter, efficientvit_sam_predictor, None, None))
         # cv2.setMouseCallback("Left_nice_small", coords_mouse_disp, (points_depth, filtered_points_depth, grayL.shape, bboxes, Left_nice_small, efficientvit_sam_predictor, points_x, points_y, filtered_points_x, filtered_points_y))
         # print("target depth: ", target_depth)
         # print("spending time: {:.2f}秒".format(end_time - start_time))
@@ -764,4 +777,4 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
 
 if __name__ == "__main__":
     # stereo_calibration(checkerboard_long,checkerboard_short,checker_size,checkerboard_start_num, checkerboard_end_num, pics_folder, save_folder)
-    disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0, flag_edge_match = True) # flag_method: 0 - stereo_SGBM
+    disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 1, flag_edge_match = False) # flag_method: 0 - stereo_SGBM, 1 - BP, 2 - CSBP
