@@ -391,6 +391,33 @@ def torch_cuda():
     print(torch.cuda.is_available())
 
 
+def getQ_matlab():
+    MRS = np.array([[1542.8, 0.3707, 950.1], [0, 1542.6, 819.6], [0, 0, 1]]) # K 矩阵
+    MLS = np.array([[1556.8, -0.2483, 807.2], [0, 1556.2, 823.1], [0, 0, 1]])
+    dRS = np.array([-0.0550, 0.2772, 0.00014, -0.0010, -0.3782]) # stereoParams.CameraParameters1.Distortion
+    dLS = np.array([-0.0739, 0.3643, 0.00017, -0.00027, -0.5756])
+    R = np.array([[0.9999, -0.0018, -0.0124], [0.0018, 1, -0.0022], [0.0124, 0.0022, 0.9999]]) # stereoParams.PoseCamera2
+    T = np.array([[-159.7378], [-0.0879], [0.1531]]) # stereoParams.PoseCamera2
+    rectify_scale= 0
+    shape = (1520,1520)
+    RL, RR, PL, PR, Q, roiL, roiR= cv2.stereoRectify(MLS, dLS, MRS, dRS,
+                                                    shape[::-1], R, T,
+                                                    rectify_scale,(0,0))  # last paramater is alpha, if 0= croped, if 1= not croped
+    Left_Stereo_Map= cv2.initUndistortRectifyMap(MLS, dLS, RL, PL,
+                                                shape[::-1], cv2.CV_32FC1)   # cv2.CV_16SC2 this format enables us the programme to work faster
+    Right_Stereo_Map= cv2.initUndistortRectifyMap(MRS, dRS, RR, PR,
+                                                shape[::-1], cv2.CV_32FC1)
+    
+    save_folder = r"D:\Code\StereoDepthEstimation\StereoVision\results" # 存放相机参数目录
+    left_map_file=os.path.join(save_folder, 'Left_Stereo_Map.npz')
+    right_map_file=os.path.join(save_folder, 'Right_Stereo_Map.npz')
+    Q_file=os.path.join(save_folder, 'Q.npy')
+    
+    np.savez(left_map_file, Left_Stereo_Map_0=Left_Stereo_Map[0], Left_Stereo_Map_1=Left_Stereo_Map[1])
+    np.savez(right_map_file, Right_Stereo_Map_0=Right_Stereo_Map[0], Right_Stereo_Map_1=Right_Stereo_Map[1])
+    np.save(Q_file, Q)
+    print("校正映射矩阵计算完毕，已保存")
+
 
 if __name__ == '__main__':
     # cameras = list_cameras()
@@ -400,8 +427,9 @@ if __name__ == '__main__':
     # yolo_bbox()
     # np_nonzero()
     # test_segmentation()
-    read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Q.npy')
+    # read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Q.npy')
     # read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Left_Stereo_Map.npz')
     # read_npy_npz(r'D:\Code\StereoDepthEstimation\StereoVision\results\Right_Stereo_Map.npz')
     # cv2_cuda()
     # torch_cuda()
+    getQ_matlab()

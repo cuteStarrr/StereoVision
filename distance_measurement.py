@@ -232,7 +232,7 @@ def get_image_border(bbox, image_shape):
 
 
 def get_target_bbox(bboxes, classids, x, y):
-    if bboxes is None:
+    if bboxes is None or classids is None:
         return None, None
     target_id = -1
     target_size = image_height * image_width
@@ -477,22 +477,22 @@ def coords_mouse_disp(event,x,y,flags,param):
     if event == cv2.EVENT_LBUTTONDBLCLK:
         points_depth, filtered_points_depth, image_shape, bboxes, left_nice, predictor, points_x, points_y, filtered_points_x, filtered_points_y = param
         left_nice = cv2.cvtColor(left_nice, cv2.COLOR_BGR2RGB)
-        target_bbox = get_target_bbox(bboxes, x, y)
-        if target_bbox is not None:
-            plt.figure(figsize=(10, 10))
-            plt.imshow(left_nice)
-            # show_mask(masks[0], plt.gca())
-            show_box(target_bbox, plt.gca())
-            plt.title("target bbox")
-            plt.axis('off')
-            plt.show()
+        # target_bbox = get_target_bbox(bboxes, None, x, y)
+        # if target_bbox is not None:
+        #     plt.figure(figsize=(10, 10))
+        #     plt.imshow(left_nice)
+        #     # show_mask(masks[0], plt.gca())
+        #     show_box(target_bbox, plt.gca())
+        #     plt.title("target bbox")
+        #     plt.axis('off')
+        #     plt.show()
         print("y: ", y, "x: ", x, "Distance not filter: ", points_depth[y,x])
         print("y: ", y, "x: ", x, "Distance using filter: ", filtered_points_depth[y,x])
         print("y: ", y, "x: ", x, "x not filter: ", points_x[y,x])
         print("y: ", y, "x: ", x, "x using filter: ", filtered_points_x[y,x])
         print("y: ", y, "x: ", x, "y not filter: ", points_y[y,x])
         print("y: ", y, "x: ", x, "y using filter: ", filtered_points_y[y,x])
-        print('target_depth: ', get_target_depth(points_depth, filtered_points_depth, image_shape, y, x, target_bbox, predictor, left_nice))
+        # print('target_depth: ', get_target_depth(points_depth, filtered_points_depth, image_shape, y, x, target_bbox, predictor, left_nice))
         
         
 def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, checkerboard_start_num, checkerboard_end_num, pic_folder, save_folder):
@@ -568,8 +568,8 @@ def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, chec
                                                             criteria = criteria_stereo,
                                                             flags = cv2.CALIB_FIX_INTRINSIC)
 
-    print('E: ', E)
-    print('F: ', F)
+    # print('E: ', E)
+    # print('F: ', F)
     # StereoRectify function
     rectify_scale= 0 # if 0 image croped, if 1 image nor croped
     # 该函数的作用是为每个摄像头计算立体校正的映射矩阵，所以其运行结果并不是直接将图片进行立体矫正，
@@ -578,7 +578,17 @@ def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, chec
     RL, RR, PL, PR, Q, roiL, roiR= cv2.stereoRectify(MLS, dLS, MRS, dRS,
                                                     ChessImaR.shape[::-1], R, T,
                                                     rectify_scale,(0,0))  # last paramater is alpha, if 0= croped, if 1= not croped
-
+    
+    print('R: ', R)
+    print('T: ', T)
+    print('MLS: ', MLS)
+    print('dLS: ', dLS)
+    print('MRS: ', MRS)
+    print('dRS: ', dRS)
+    print('RL: ', RL)
+    print('PL: ', PL)
+    print('RR: ', RR)
+    print('PR: ', PR)
     # initUndistortRectifyMap function
     Left_Stereo_Map= cv2.initUndistortRectifyMap(MLS, dLS, RL, PL,
                                                 ChessImaR.shape[::-1], cv2.CV_32FC1)   # cv2.CV_16SC2 this format enables us the programme to work faster
@@ -936,6 +946,8 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
 
 
 if __name__ == "__main__":
-    # stereo_calibration(checkerboard_long,checkerboard_short,checker_size,checkerboard_start_num, checkerboard_end_num, pics_folder, save_folder)
+    # 注意，暂时把左右搞反了，下次记得改回来（因为杭电相机就是反的）
+    stereo_calibration(checkerboard_long,checkerboard_short,checker_size,checkerboard_start_num, checkerboard_end_num, pics_folder, save_folder)
     # disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0, flag_edge_match = False) # flag_method: 0 - stereo_SGBM, 1 - BP, 2 - CSBP
+    # 注意，暂时把左右搞反了，下次记得改回来（因为杭电相机就是反的）
     disparity_calculation_test4pics(pic_folder=r"D:\Code\StereoDepthEstimation\Backup\StereoVision_old\testimages", left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0, flag_edge_match = False) # flag_method: 0 - stereo_SGBM, 1 - BP, 2 - CSBP
