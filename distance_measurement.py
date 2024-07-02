@@ -45,7 +45,7 @@ checkerboard_end_num = 101 # 标定图片的结束序号
 weight_path_yolo = r"D:\Code\StereoDepthEstimation\weights\yolov8n.pt" # yolo的权重地址
 weight_path_efficientvitSAM = r"D:\Code\StereoDepthEstimation\weights\efficientvit_sam_l0.pt" # efficientsam的权重地址
 camera_id = 1 # 相机编号
-
+mask_iou_thred = 1 # 计算两个 mask 是否相近 若相近则启用边缘匹配 否则就是全图匹配
 """
 以下是用于计算距离的超参数 一般不更改
 """
@@ -232,6 +232,8 @@ def get_image_border(bbox, image_shape):
 
 
 def get_target_bbox(bboxes, classids, x, y):
+    if bboxes is None or classids is None:
+        return None, None
     target_id = -1
     target_size = image_height * image_width
     for bbox_id in range(bboxes.shape[0]):
@@ -299,12 +301,15 @@ def get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, ri
 
 def get_mask(predictor, image, bbox = None):
     predictor.set_image(image)
-    if bbox is None:
+    if bbox is None: # 如果没有 bbox 那么认为整张图像已经被裁剪过了 图像边缘当做是 bbox
         h,w,c = image.shape
         bbox = np.array([0, 0, w-1, h-1])
+    
+    input_points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[0], bbox[3]], [bbox[2], bbox[3]]]) # xy
+    input_labels = np.array([0, 0, 0, 0])
     target_mask, _, _ = predictor.predict(
-        point_coords=None,
-        point_labels=None,
+        point_coords=input_points,
+        point_labels=input_labels,
         box=bbox[None, :],
         multimask_output=False,
     )
@@ -343,7 +348,7 @@ def getDepth_stereoSGBM_WLSFilter(image_left, image_right, stereo, stereoR, wls_
     return points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y
 
 
-def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match = None, boundary_left = None, mask_left = None, image_shape = None, flag_normal = False):
+def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match = False, boundary_left = None, mask_left = None, image_shape = None, flag_normal = False):
     print("y: ", y, "x: ", x, "Distance not filter: ", points_depth[y,x])
     print("y: ", y, "x: ", x, "Distance using filter: ", filtered_points_depth[y,x])
     print("y: ", y, "x: ", x, "x not filter: ", points_x[y,x])
@@ -367,6 +372,17 @@ def get_depth_specific_area(filtered_points_depth, specific_area):
     return specific_area_points.mean()
 
 
+def cal_iou(mask_left, mask_right):
+    mask_add = mask_left + mask_right
+    total_num = np.sum(mask_add > 0)
+    zero_num = np.sum(mask_add == 0)
+
+    if total_num == 0:
+        return None
+    else:
+        return (np.sum(mask_left == mask_right) - zero_num) / total_num
+
+
 def cropped_mask_bbox(mask, bbox):
     # bbox - xyxy
     x0_target, y0_target, x1_target, y1_target = bbox
@@ -376,7 +392,7 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
     # print(type(target_bbox))
     # print(target_bbox.shape)
     if event == cv2.EVENT_LBUTTONDBLCLK:
-        bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, wls_filter, predictor, stereo, stereoR = param
+        bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_method, Q, wls_filter, predictor, stereo, stereoR = param
 
         # 这里的通道转换可能需要改动
         left_nice = cv2.cvtColor(left_nice, cv2.COLOR_BGR2RGB)
@@ -385,7 +401,7 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
         target_bbox_left, target_classid_left = get_target_bbox(bboxes_left, classids_left, x, y)
         target_bbox_right, target_classid_right = get_target_bbox(bboxes_right, classids_right, x, y)
 
-        if target_bbox_left is not None and target_bbox_right is not None:
+        if target_bbox_left is not None and target_bbox_right is not None and target_classid_left is not None and target_classid_right is not None:
             if target_classid_left == target_classid_right:
                 # left bbox
                 plt.figure(figsize=(10, 10))
@@ -431,11 +447,16 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 plt.axis('off')
                 plt.show()
 
-                if flag_edge_match > 0: # 只进行边缘匹配
+
+                # 测试下来用边缘的话效果不好 失去了滤波的作用
+                flag_edge_match = False
+                # flag_edge_match = cal_iou(mask_left=mask_left, mask_right=mask_right) > mask_iou_thred
+
+                if flag_edge_match: # 只进行边缘匹配
                     boundary_left = find_boundaries(mask_left, mode='inner').astype(np.uint8)
                     boundary_right = find_boundaries(mask_right, mode='inner').astype(np.uint8)
-                    cropped_image_left[boundary_left > 0] = 0
-                    cropped_image_right[boundary_right > 0] = 0
+                    cropped_image_left[boundary_left != 0] = 0 # 之前为0的结果居然蛮准的
+                    cropped_image_right[boundary_right != 0] = 0
                     # image_left = np.where(boundary_left, cropped_image_left, 0)
                     # image_right = np.where(boundary_right, cropped_image_right, 0)
                 else: # cropped image匹配
@@ -475,22 +496,22 @@ def coords_mouse_disp(event,x,y,flags,param):
     if event == cv2.EVENT_LBUTTONDBLCLK:
         points_depth, filtered_points_depth, image_shape, bboxes, left_nice, predictor, points_x, points_y, filtered_points_x, filtered_points_y = param
         left_nice = cv2.cvtColor(left_nice, cv2.COLOR_BGR2RGB)
-        target_bbox = get_target_bbox(bboxes, x, y)
-        if target_bbox is not None:
-            plt.figure(figsize=(10, 10))
-            plt.imshow(left_nice)
-            # show_mask(masks[0], plt.gca())
-            show_box(target_bbox, plt.gca())
-            plt.title("target bbox")
-            plt.axis('off')
-            plt.show()
+        # target_bbox = get_target_bbox(bboxes, None, x, y)
+        # if target_bbox is not None:
+        #     plt.figure(figsize=(10, 10))
+        #     plt.imshow(left_nice)
+        #     # show_mask(masks[0], plt.gca())
+        #     show_box(target_bbox, plt.gca())
+        #     plt.title("target bbox")
+        #     plt.axis('off')
+        #     plt.show()
         print("y: ", y, "x: ", x, "Distance not filter: ", points_depth[y,x])
         print("y: ", y, "x: ", x, "Distance using filter: ", filtered_points_depth[y,x])
         print("y: ", y, "x: ", x, "x not filter: ", points_x[y,x])
         print("y: ", y, "x: ", x, "x using filter: ", filtered_points_x[y,x])
         print("y: ", y, "x: ", x, "y not filter: ", points_y[y,x])
         print("y: ", y, "x: ", x, "y using filter: ", filtered_points_y[y,x])
-        print('target_depth: ', get_target_depth(points_depth, filtered_points_depth, image_shape, y, x, target_bbox, predictor, left_nice))
+        # print('target_depth: ', get_target_depth(points_depth, filtered_points_depth, image_shape, y, x, target_bbox, predictor, left_nice))
         
         
 def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, checkerboard_start_num, checkerboard_end_num, pic_folder, save_folder):
@@ -566,6 +587,8 @@ def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, chec
                                                             criteria = criteria_stereo,
                                                             flags = cv2.CALIB_FIX_INTRINSIC)
 
+    # print('E: ', E)
+    # print('F: ', F)
     # StereoRectify function
     rectify_scale= 0 # if 0 image croped, if 1 image nor croped
     # 该函数的作用是为每个摄像头计算立体校正的映射矩阵，所以其运行结果并不是直接将图片进行立体矫正，
@@ -574,7 +597,17 @@ def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, chec
     RL, RR, PL, PR, Q, roiL, roiR= cv2.stereoRectify(MLS, dLS, MRS, dRS,
                                                     ChessImaR.shape[::-1], R, T,
                                                     rectify_scale,(0,0))  # last paramater is alpha, if 0= croped, if 1= not croped
-
+    
+    print('R: ', R)
+    print('T: ', T)
+    print('MLS: ', MLS)
+    print('dLS: ', dLS)
+    print('MRS: ', MRS)
+    print('dRS: ', dRS)
+    print('RL: ', RL)
+    print('PL: ', PL)
+    print('RR: ', RR)
+    print('PR: ', PR)
     # initUndistortRectifyMap function
     Left_Stereo_Map= cv2.initUndistortRectifyMap(MLS, dLS, RL, PL,
                                                 ChessImaR.shape[::-1], cv2.CV_32FC1)   # cv2.CV_16SC2 this format enables us the programme to work faster
@@ -639,9 +672,163 @@ def get_WLSFilter(stereo):
 
     return wls_filter
 
+def disparity_calculation_test4pics(pic_folder, left_map_file, right_map_file, image_height, image_width, Q_file, flag_method, flag_edge_match):
+    #*************************************
+    #***** Starting the StereoVision *****
+    #*************************************
+
+    # Call the two cameras
+    # camera = cv2.VideoCapture(camera_id)
+    # camera.set(cv2.CAP_PROP_FRAME_WIDTH, image_width)
+    # camera.set(cv2.CAP_PROP_FRAME_HEIGHT, image_height)
+
+    # prepare map function for remp
+    left_map = np.load(left_map_file)
+    right_map = np.load(right_map_file)
+    Left_Stereo_Map = (left_map['Left_Stereo_Map_0'], left_map['Left_Stereo_Map_1'])
+    Right_Stereo_Map = (right_map['Right_Stereo_Map_0'], right_map['Right_Stereo_Map_1'])
+    Q = np.load(Q_file)
+
+    # Load a model
+    model = YOLO(weight_path_yolo).to('cpu')  # pretrained YOLOv8n model
+
+    efficientvit_sam = create_sam_model(
+    name="l0", weight_url=weight_path_efficientvitSAM,
+    )
+    efficientvit_sam = efficientvit_sam.eval()
+    efficientvit_sam_predictor = EfficientViTSamPredictor(efficientvit_sam)
+
+    while True:   # Put the amount of pictures you have taken for the calibration inbetween range(0,?) wenn starting from the image number 0
+        t= str(0)
+        frameL= cv2.imread(os.path.join(pic_folder, 'testimage-L'+t+'.png'))    # Left side
+        frameR= cv2.imread(os.path.join(pic_folder, 'testimage-R'+t+'.png'))    # Right side
+        # print(frameL.shape)
+        # Start Reading Camera images
+        # ret, frame = camera.read()
+        # if not ret:
+        #     print("图像获取失败，请按照说明进行问题排查！")
+        #     break
+        
+        # frameL = frame[0:image_height, 0:int(image_width/2)]
+        # frameR = frame[0:image_height, int(image_width/2):image_width]
+
+        # (result[0]).show()
+        # print(type(bboxes))
+
+        # Rectify the images on rotation and alignement
+        left_nice= cv2.remap(frameL,Left_Stereo_Map[0],Left_Stereo_Map[1], interpolation = cv2.INTER_LANCZOS4, borderMode = cv2.BORDER_CONSTANT)  # Rectify the image using the kalibration parameters founds during the initialisation
+        right_nice= cv2.remap(frameR,Right_Stereo_Map[0],Right_Stereo_Map[1], interpolation = cv2.INTER_LANCZOS4, borderMode = cv2.BORDER_CONSTANT)
+
+        # print('left_nice.shape: ', left_nice.shape)
+
+        # 感觉不是很对，因为原图需要remap，可以先看看效果
+        # Left_nice_small = cv2.resize(Left_nice, (image_width / 4, image_height / 2))
+        # Right_nice_small = cv2.resize(Right_nice, (image_width / 4, image_height / 2))
+        # Run batched inference on a list of images
+        # result_left = model(left_nice, verbose=False)  # return a list of Results objects
+        # result_right = model(right_nice, verbose=False)
+        # result = model(Left_nice_small)
+        # print(type(result))
+        # if result_left is not None and result_right is not None:
+        #     bboxes_left = ((result_left[0].boxes.xyxy).int()).detach().numpy()
+        #     bboxes_right = ((result_right[0].boxes.xyxy).int()).detach().numpy()
+        #     classids_left = ((result_left[0].boxes.cls).int()).detach().numpy()
+        #     classids_right = ((result_right[0].boxes.cls).int()).detach().numpy()
+        # else:
+        #     bboxes_left = None
+        #     bboxes_right = None
+        #     classids_left = None
+        #     classids_right = None
+        
+        # start_time = time.time()
+
+        # Convert from color(BGR) to gray
+        grayR= cv2.cvtColor(right_nice,cv2.COLOR_BGR2GRAY)
+        grayL= cv2.cvtColor(left_nice,cv2.COLOR_BGR2GRAY)
+
+        # grayR= cv2.cvtColor(Right_nice_small,cv2.COLOR_BGR2GRAY)
+        # grayL= cv2.cvtColor(Left_nice_small,cv2.COLOR_BGR2GRAY)
+        # cv2.imshow("grayL", grayL)
+
+        # Compute the 2 images for the Depth_image
+        if flag_method == 0: # StereoSGBM_WLSFilter
+            stereo, stereoR = get_StereoSGBM()
+        elif flag_method == 1:
+            stereo = cv2.cuda.createStereoBeliefPropagation(numDisparities=16)
+        elif flag_method == 2:
+            stereo = cv2.cuda.createStereoConstantSpaceBP(numDisparities=16)
+        
+        wls_filter = get_WLSFilter(stereo)
+
+        disp= stereo.compute(grayL,grayR)#.astype(np.float32)/ 16
+
+        points_depth, points_x, points_y = get_depth(disp, Q, 16, True)
+        # print("points_depth shape: ", points_depth.shape)
+        # print("points_depth max: ", points_depth.max())
+        # print("points_depth min: ", points_depth.min())
+        # end_time = time.time()
+
+        dispL= disp
+        dispR= stereoR.compute(grayR,grayL)
+
+        # Using the WLS filter
+        dsp_filtered = wls_filter.filter(dispL,grayL,None,dispR)
+        filtered_points_depth, filtered_points_x, filtered_points_y = get_depth(dsp_filtered, Q, 16, True)
+        # print("filtered_points_depth shape: ", filtered_points_depth.shape)
+        # print("filtered_points_depth max: ", filtered_points_depth.max())
+        # print("filtered_points_depth min: ", filtered_points_depth.min())
+        # target_depth = get_target_depth(points_depth, filtered_points_depth, grayL)
+        # end_time_filtered = time.time()
+
+        # filteredImg = dsp_filtered
+        # filteredImg = cv2.normalize(src=filteredImg, dst=filteredImg, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX)
+        # filteredImg = np.uint8(filteredImg)
+        
+        # filt_Color= cv2.applyColorMap(filteredImg,cv2.COLORMAP_JET) 
+
+        # numDisparities = 6
+        # disp8 = cv2.convertScaleAbs(disp, alpha=255.0 / ((numDisparities * 16 + 16) * 16.0))
+        # dsp_filtered8 = cv2.convertScaleAbs(dsp_filtered, alpha=255.0 / ((numDisparities * 16 + 16) * 16.0))
+        
+        # Show the result for the Depth_image
+        cv2.namedWindow('Left_nice', cv2.WINDOW_KEEPRATIO)
+        cv2.resizeWindow('Left_nice', 640, 640)
+        cv2.imshow('Left_nice', left_nice)
+        cv2.namedWindow('right_nice', cv2.WINDOW_KEEPRATIO)
+        cv2.resizeWindow('right_nice', 640, 640)
+        cv2.imshow('right_nice', right_nice)
+        cv2.namedWindow('frameL', cv2.WINDOW_KEEPRATIO)
+        cv2.resizeWindow('frameL', 640, 640)
+        cv2.imshow('frameL', frameL)
+        cv2.namedWindow('frameR', cv2.WINDOW_KEEPRATIO)
+        cv2.resizeWindow('frameR', 640, 640)
+        cv2.imshow('frameR', frameR)
+        # cv2.imshow('Left_nice_small', Left_nice_small)
+        # cv2.imshow('Disparity', disp8)
+        # cv2.imshow('Disparity Filtered', dsp_filtered8)
+        # cv2.imshow('Filtered Color Depth',filt_Color)
+
+        # Mouse click
+        if flag_method == 0:
+            cv2.setMouseCallback("Left_nice", coords_mouse_disp, (points_depth, filtered_points_depth, grayL.shape, None, left_nice, efficientvit_sam_predictor, points_x, points_y, filtered_points_x, filtered_points_y))
+        else:
+            cv2.setMouseCallback("Left_nice", coords_mouse_disp, (points_depth, filtered_points_depth, grayL.shape, None, left_nice, efficientvit_sam_predictor, points_x, points_y, filtered_points_x, filtered_points_y))
+        # cv2.setMouseCallback("Left_nice_small", coords_mouse_disp, (points_depth, filtered_points_depth, grayL.shape, bboxes, Left_nice_small, efficientvit_sam_predictor, points_x, points_y, filtered_points_x, filtered_points_y))
+        # print("target depth: ", target_depth)
+        # print("spending time: {:.2f}秒".format(end_time - start_time))
+        # print("spending time (filtered): {:.2f}秒".format(end_time_filtered - start_time))
+        # End the Programme
+        if cv2.waitKey(1) & 0xFF == ord(' '):
+            break
+
+    # Release the Cameras
+    # camera.release()
+    cv2.destroyAllWindows()
 
 
-def disparity_calculation(left_map_file, right_map_file, image_height, image_width, Q_file, flag_method, flag_edge_match):
+
+
+def disparity_calculation(left_map_file, right_map_file, image_height, image_width, Q_file, flag_method = 0):
     #*************************************
     #***** Starting the StereoVision *****
     #*************************************
@@ -659,8 +846,8 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
     Q = np.load(Q_file)
 
     # Load a model
-    model = YOLO(weight_path_yolo)  # pretrained YOLOv8n model
-
+    model = YOLO("yolov8n.pt")  # pretrained YOLOv8n model
+    # print(model)
     efficientvit_sam = create_sam_model(
     name="l0", weight_url=weight_path_efficientvitSAM,
     )
@@ -687,6 +874,8 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
         left_nice= cv2.remap(frameL,Left_Stereo_Map[0],Left_Stereo_Map[1], interpolation = cv2.INTER_LANCZOS4, borderMode = cv2.BORDER_CONSTANT)  # Rectify the image using the kalibration parameters founds during the initialisation
         right_nice= cv2.remap(frameR,Right_Stereo_Map[0],Right_Stereo_Map[1], interpolation = cv2.INTER_LANCZOS4, borderMode = cv2.BORDER_CONSTANT)
 
+        # print('left_nice shape: ', left_nice.shape)
+
         # 感觉不是很对，因为原图需要remap，可以先看看效果
         # Left_nice_small = cv2.resize(Left_nice, (image_width / 4, image_height / 2))
         # Right_nice_small = cv2.resize(Right_nice, (image_width / 4, image_height / 2))
@@ -695,10 +884,10 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
         result_right = model(right_nice, verbose=False)
         # result = model(Left_nice_small)
         # print(type(result))
-        bboxes_left = ((result_left[0].boxes.xyxy).int()).detach().numpy()
-        bboxes_right = ((result_right[0].boxes.xyxy).int()).detach().numpy()
-        classids_left = ((result_left[0].boxes.cls).int()).detach().numpy()
-        classids_right = ((result_right[0].boxes.cls).int()).detach().numpy()
+        bboxes_left = ((result_left[0].boxes.xyxy).int()).detach().cpu().numpy()
+        bboxes_right = ((result_right[0].boxes.xyxy).int()).detach().cpu().numpy()
+        classids_left = ((result_left[0].boxes.cls).int()).detach().cpu().numpy()
+        classids_right = ((result_right[0].boxes.cls).int()).detach().cpu().numpy()
         
         # start_time = time.time()
 
@@ -759,9 +948,9 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
 
         # Mouse click
         if flag_method == 0:
-            cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, wls_filter, efficientvit_sam_predictor, stereo, stereoR))
+            cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_method, Q, wls_filter, efficientvit_sam_predictor, stereo, stereoR))
         else:
-            cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_edge_match, flag_method, Q, wls_filter, efficientvit_sam_predictor, None, None))
+            cv2.setMouseCallback("Left_nice", mouseClick_bbox_disp, (bboxes_left, bboxes_right, classids_left, classids_right, left_nice, right_nice, flag_method, Q, wls_filter, efficientvit_sam_predictor, stereo, None))
         # cv2.setMouseCallback("Left_nice_small", coords_mouse_disp, (points_depth, filtered_points_depth, grayL.shape, bboxes, Left_nice_small, efficientvit_sam_predictor, points_x, points_y, filtered_points_x, filtered_points_y))
         # print("target depth: ", target_depth)
         # print("spending time: {:.2f}秒".format(end_time - start_time))
@@ -776,5 +965,8 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
 
 
 if __name__ == "__main__":
+    # 注意，暂时把左右搞反了，下次记得改回来（因为杭电相机就是反的）
     # stereo_calibration(checkerboard_long,checkerboard_short,checker_size,checkerboard_start_num, checkerboard_end_num, pics_folder, save_folder)
-    disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 1, flag_edge_match = False) # flag_method: 0 - stereo_SGBM, 1 - BP, 2 - CSBP
+    disparity_calculation(left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0) # flag_method: 0 - stereo_SGBM, 1 - BP, 2 - CSBP 目前只实现了SGBM, BP/CSBP 编译未通过
+    # 注意，暂时把左右搞反了，下次记得改回来（因为杭电相机就是反的）
+    # disparity_calculation_test4pics(pic_folder=r"D:\Code\StereoDepthEstimation\Backup\StereoVision_old\testimages", left_map_file=left_map_file, right_map_file=right_map_file, image_height=image_height, image_width=image_width, Q_file=Q_file, flag_method = 0, flag_edge_match = False) # flag_method: 0 - stereo_SGBM, 1 - BP, 2 - CSBP
