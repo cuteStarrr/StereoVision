@@ -45,7 +45,7 @@ checkerboard_end_num = 101 # 标定图片的结束序号
 weight_path_yolo = r"D:\Code\StereoDepthEstimation\weights\yolov8n.pt" # yolo的权重地址
 weight_path_efficientvitSAM = r"D:\Code\StereoDepthEstimation\weights\efficientvit_sam_l0.pt" # efficientsam的权重地址
 camera_id = 1 # 相机编号
-mask_iou_thred = 1 # 计算两个 mask 是否相近 若相近则启用边缘匹配 否则就是全图匹配
+mask_iou_thred = 0.5 # 计算两个 mask 是否相近 若相近则启用边缘匹配 否则就是全图匹配
 """
 以下是用于计算距离的超参数 一般不更改
 """
@@ -299,14 +299,14 @@ def get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, ri
     return cropped_image_left, cropped_image_right, (x0_target, y0_target, x1_target, y1_target)
 
 
-def get_mask(predictor, image, bbox = None):
+def get_mask(predictor, image, bbox = None, flag_points = False):
     predictor.set_image(image)
     if bbox is None: # 如果没有 bbox 那么认为整张图像已经被裁剪过了 图像边缘当做是 bbox
         h,w,c = image.shape
         bbox = np.array([0, 0, w-1, h-1])
     
-    input_points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[0], bbox[3]], [bbox[2], bbox[3]]]) # xy
-    input_labels = np.array([0, 0, 0, 0])
+    input_points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[0], bbox[3]], [bbox[2], bbox[3]]]) if flag_points else None# xy
+    input_labels = np.array([0, 0, 0, 0]) if flag_points else None
     target_mask, _, _ = predictor.predict(
         point_coords=input_points,
         point_labels=input_labels,
@@ -450,7 +450,10 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
 
                 # 测试下来用边缘的话效果不好 失去了滤波的作用
                 flag_edge_match = False
-                # flag_edge_match = cal_iou(mask_left=mask_left, mask_right=mask_right) > mask_iou_thred
+                if cal_iou(mask_left=mask_left, mask_right=mask_right) < mask_iou_thred: # 如果两个mask差别较大 则加入背景点
+                    mask_left = cropped_mask_bbox(get_mask(predictor=predictor, image=left_nice, bbox=target_bbox_left), target_bbox, True)
+                    mask_right = cropped_mask_bbox(get_mask(predictor=predictor, image=right_nice, bbox=target_bbox_right), target_bbox, True)
+
 
                 if flag_edge_match: # 只进行边缘匹配
                     boundary_left = find_boundaries(mask_left, mode='inner').astype(np.uint8)
