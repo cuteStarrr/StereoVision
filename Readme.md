@@ -37,5 +37,7 @@ function ```disparity_calculation``` uses ```efficientSAM``` to get the target s
 
 ## TODO
 
-- Use bbox to reduce the range of matches(both images)
-- Use edges to determine feature points
+- ~~Use bbox to reduce the range of matches(both images)~~
+- ~~Use edges to determine feature points~~ (Quit, bad performance)
+- add ```config``` file
+- rewrite codes as class
