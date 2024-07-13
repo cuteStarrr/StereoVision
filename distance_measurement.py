@@ -23,7 +23,7 @@ from fitter import HistFit
 from pylab import hist
 from skimage.segmentation import find_boundaries
 import torch
-
+from skimage import measure
 
 
 """
@@ -336,14 +336,21 @@ def getDepth_BP_CSBP(image_left, image_right, Q, flag_bp = True):
 
 
 def getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q):
-    grayL= cv2.cvtColor(image_left,cv2.COLOR_RGB2GRAY)
-    grayR= cv2.cvtColor(image_right,cv2.COLOR_RGB2GRAY)
+    '''
+    感觉可以不用灰度图进行计算 直接用彩色图像
+    '''
+    # grayL= cv2.cvtColor(image_left,cv2.COLOR_RGB2GRAY)
+    # grayR= cv2.cvtColor(image_right,cv2.COLOR_RGB2GRAY)
 
-    stereo, stereoR = get_StereoSGBM()
+    h,w,c = image_left.shape
 
-    dispL= stereo.compute(grayL,grayR)#.astype(np.float32)/ 16
+    stereo, stereoR = get_StereoSGBM(w)
+
+    # dispL= stereo.compute(grayL,grayR)#.astype(np.float32)/ 16
+    dispL= stereo.compute(image_left,image_right)
     points_depth, points_x, points_y = get_depth(dispL, Q, 16, True)
-    dispR= stereoR.compute(grayR,grayL)
+    # dispR= stereoR.compute(grayR,grayL)
+    dispR = stereoR.compute(image_right, image_left)
 
 
     plt.figure(figsize=(10, 10))
@@ -352,11 +359,11 @@ def getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q):
     plt.axis('off')
     plt.show()
 
-    plt.figure(figsize=(10, 10))
-    plt.imshow(grayL)
-    plt.title("grayL")
-    plt.axis('off')
-    plt.show()
+    # plt.figure(figsize=(10, 10))
+    # plt.imshow(grayL)
+    # plt.title("grayL")
+    # plt.axis('off')
+    # plt.show()
 
     plt.figure(figsize=(10, 10))
     plt.imshow(dispR)
@@ -365,7 +372,9 @@ def getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q):
     plt.show()
 
     wls_filter = get_WLSFilter(stereo)
-    dsp_filtered = wls_filter.filter(dispL,grayL,None,dispR)
+    # dsp_filtered = wls_filter.filter(dispL,dispL,None,dispR)
+    # dsp_filtered = wls_filter.filter(dispL,image_left,None,dispR)
+    dsp_filtered = wls_filter.filter(disparity_map_left=dispL, left_view=image_left, filtered_disparity_map=None, disparity_map_right=dispR, right_view=image_right)
     filtered_points_depth, filtered_points_x, filtered_points_y = get_depth(dsp_filtered, Q, 16, True)
 
     return points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y
@@ -391,7 +400,8 @@ def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, f
 
 def get_depth_specific_area(filtered_points_depth, specific_area):
     specific_area_points = filtered_points_depth[np.nonzero(specific_area)]
-    specific_area_points = specific_area_points[specific_area_points > 0]
+    specific_area_points[np.isinf(specific_area_points) | np.isnan(specific_area_points)] = 0
+    specific_area_points = specific_area_points[specific_area_points > 0] # 为了去掉负数的距离
     return specific_area_points.mean()
 
 
@@ -433,6 +443,35 @@ def cropped_mask_bbox(mask, bbox):
     # bbox - xyxy
     x0_target, y0_target, x1_target, y1_target = bbox
     return mask[y0_target: y1_target, x0_target:x1_target]
+
+
+def getMaxRegion(mask):
+    # Step 1: 标记连通域
+    label_image = measure.label(mask)
+
+    # Step 2: 获取所有连通域的属性
+    props = measure.regionprops(label_image)
+
+    # Step 3: 找到面积最大的连通域
+    max_area = 0
+    max_region = None
+    for region in props:
+        if region.area > max_area:
+            max_area = region.area
+            max_region = region
+
+    # Step 4: 创建最大连通域的二值图像
+    if max_region is not None:
+        max_region_mask = np.zeros_like(mask)
+        # max_region_mask[max_region.coords] = 1
+        for coords in max_region.coords:
+            max_region_mask[coords[0], coords[1]] = 1
+        return max_region_mask
+
+    
+    return None
+
+
 
 def mouseClick_bbox_disp(event,x,y,flags,param):
     # print(type(target_bbox))
@@ -500,6 +539,9 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 # 测试下来用边缘的话效果不好 失去了滤波的作用
                 flag_edge_match = False
 
+                '''
+                如果不想要这个判断 就把 mask_iou_thred 设为 0
+                '''
                 if iou_old < mask_iou_thred: # 如果两个mask差别较大 则加入背景点
                     print("Mask varies too much! Adding background points for better performance!")
                     print('iou before: ', iou_old)
@@ -532,6 +574,8 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 mask_right = cropped_mask_bbox(mask_right, target_bbox)
 
                 if flag_edge_match: # 只进行边缘匹配
+                    mask_left = getMaxRegion(mask_left)
+                    mask_right = getMaxRegion(mask_right)
                     boundary_left = find_boundaries(mask_left, mode='inner').astype(np.uint8)
                     boundary_right = find_boundaries(mask_right, mode='inner').astype(np.uint8)
                     cropped_image_left[boundary_left != 0] = 0 # 之前为0的结果居然蛮准的
@@ -580,7 +624,7 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
             
         else: # 没有任何优化，直接全部图像
             print("Detect NO Target! Compute whole image!")
-            points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(left_nice, right_nice, stereo, stereoR, wls_filter, Q)
+            points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(left_nice, right_nice, Q)
             Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y)
 
 
@@ -727,11 +771,15 @@ def stereo_calibration(checkerboard_long, checkerboard_short, checker_size, chec
 
 
 
-def get_StereoSGBM():
+def get_StereoSGBM(image_w):
+    '''
+    更改了一下参数
+    感觉可以用彩色图像进行计算
+    '''
     # Create StereoSGBM and prepare all parameters
     window_size = 3
     min_disp = 0
-    num_disp = 256-min_disp
+    num_disp = math.floor(min(256-min_disp, image_w) / 16) * 16
 
     # 用SGBM算法获取视差图，即景深图
     # StereoSGBM的速度比StereoBM慢，但是精度更高，准确性更好
@@ -746,7 +794,7 @@ def get_StereoSGBM():
         blockSize = window_size,
         uniquenessRatio = 10,
         speckleWindowSize = 100,
-        speckleRange = 32, # 原来的代码 speckleRange = 32
+        speckleRange = 2, # 原来的代码 speckleRange = 32
         disp12MaxDiff = 1, # 原来的代码为5
         P1 = 8*3*window_size**2,
         P2 = 32*3*window_size**2)
@@ -1062,6 +1110,11 @@ def disparity_calculation(left_map_file, right_map_file, image_height, image_wid
     camera.release()
     cv2.destroyAllWindows()
 
+
+
+'''
+用 boundary 还是 mask 计算距离需要实地测试
+'''
 
 if __name__ == "__main__":
     # 注意，暂时把左右搞反了，下次记得改回来（因为杭电相机就是反的）
