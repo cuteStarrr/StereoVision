@@ -30,8 +30,8 @@ from skimage import measure
 以下变量需要每次跑代码前都进行检查更改
 """
 id_image=0 # 保存标定图片的开始序号
-image_width = 2160 # 视频流图像的宽度（两张一起）
-image_height = 1080 # 视频流图像的高度
+image_width = 3040 # 视频流图像的宽度（两张一起）
+image_height = 1520 # 视频流图像的高度
 checkerboard_long = 11 # 标定板的宽度上有多少个角点
 checkerboard_short = 8 # # 标定板的高度上有多少个角点
 pics_folder = r"C:\Data\Research\work\StereoVision\checkerboard" # 拍照文件目录
@@ -41,7 +41,7 @@ right_map_file=os.path.join(save_folder, 'Right_Stereo_Map.npz')
 Q_file=os.path.join(save_folder, 'Q.npy')
 checker_size = 15 # 方格边长15mm 
 checkerboard_start_num = 0 # 标定图片的开始序号
-checkerboard_end_num = 101 # 标定图片的结束序号
+checkerboard_end_num = 99 # 标定图片的结束序号
 # weight_path_yolo = r"D:\Code\StereoDepthEstimation\weights\yolov8n.pt" # yolo的权重地址
 weight_path_efficientvitSAM = r"C:\Data\Research\work\weights\efficientvit_sam_l0.pt" # efficientsam的权重地址
 camera_id = 0 # 相机编号
@@ -393,9 +393,15 @@ def Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, f
     print("depth using window: ", get_depth_specific_area(filtered_points_depth, window))
     if flag_normal:
         if flag_edge_match:
-            print("depth using boundary: ", get_depth_specific_area(filtered_points_depth, boundary_left))
+            if boundary_left is not None:
+                print("depth using boundary: ", get_depth_specific_area(filtered_points_depth, boundary_left))
+            else:
+                print("Overlap Boundary is None!")
         else:
-            print("depth using mask: ", get_depth_specific_area(filtered_points_depth, mask_left))
+            if mask_left is not None:
+                print("depth using mask: ", get_depth_specific_area(filtered_points_depth, mask_left))
+            else:
+                print("Overlap Mask is None!")
 
 
 def get_depth_specific_area(filtered_points_depth, specific_area):
@@ -470,6 +476,19 @@ def getMaxRegion(mask):
 
     
     return None
+
+
+def getOverlapArea(region_left, region_right):
+    if region_left is not None and region_right is not None:
+        overlap_area = region_left & region_right
+        if overlap_area is not None:
+            return overlap_area
+        else:
+            # 因为是左视图的视差图
+            return region_left
+    else:
+        return None
+
 
 
 
@@ -609,8 +628,12 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 plt.show()
 
                 if flag_method == 0: # 采用SGBM + WLS Filter
+                    '''
+                    采用 overlap 区域进行计算
+                    可能有的风险 overlap 区域为0 -- 此时返回左图
+                    '''
                     points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q)
-                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape, True)
+                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, getOverlapArea(boundary_left, boundary_right), getOverlapArea(mask_left, mask_right), image_left.shape, True)
                 elif flag_method == 1: # 采用方法Belief Propagation (BP) (CUDA)
                     points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_BP_CSBP(image_left, image_right, Q)
                     Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape, True)

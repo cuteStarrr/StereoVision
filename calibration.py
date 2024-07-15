@@ -9,12 +9,13 @@ print('Push (s) to save the image you want and push (c) to see next frame withou
 """
 以下变量需要每次跑代码前都进行检查更改
 """
-id_image=0 # 保存标定图片的开始序号
+id_image=25 # 保存标定图片的开始序号
 image_width = 3040 # 视频流图像的宽度（两张一起）
 image_height = 1520 # 视频流图像的高度
 checkerboard_long = 11 # 标定板的宽度上有多少个角点
 checkerboard_short = 8 # # 标定板的高度上有多少个角点
 folder = "C:\\Data\\Research\\work\\StereoVision\\checkerboard\\" # 拍照文件目录
+camera_id = 0 # 相机编号
 
 
 # termination criteria
