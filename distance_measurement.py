@@ -279,6 +279,8 @@ def get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, ri
     """
     裁剪的是同一个位置 即xyxy坐标在左右目图像中相同
     按照算法推理应该是这样的 需要验证
+
+    感觉不应该这样 应该原始的bbox进行扩展 那么就需要纠正视差图 get_cropped_stereo_images_disparity -- 证明效果不好 放弃
     """
     x0_left, y0_left, x1_left, y1_left = target_bbox_left[0], target_bbox_left[1], target_bbox_left[2], target_bbox_left[3]
     x0_right, y0_right, x1_right, y1_right = target_bbox_right[0], target_bbox_right[1], target_bbox_right[2], target_bbox_right[3]
@@ -297,6 +299,55 @@ def get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, ri
     cropped_image_right = right_nice[y0_target: y1_target, x0_target:x1_target]
 
     return cropped_image_left, cropped_image_right, (x0_target, y0_target, x1_target, y1_target)
+
+
+
+def get_cropped_stereo_images_disparity(target_bbox_left, target_bbox_right, left_nice, right_nice):
+    x0_left, y0_left, x1_left, y1_left = target_bbox_left[0], target_bbox_left[1], target_bbox_left[2], target_bbox_left[3]
+    x0_right, y0_right, x1_right, y1_right = target_bbox_right[0], target_bbox_right[1], target_bbox_right[2], target_bbox_right[3]
+    w_left = x1_left - x0_left
+    h_left = y1_left - y0_left
+    w_right = x1_right - x0_right
+    h_right = y1_right - y0_right
+    h, w, c = left_nice.shape
+
+    print("target_bbox_left: ", target_bbox_left)
+    print("target_bbox_right: ", target_bbox_right)
+    
+    if w_left < w_right:
+        expand_dist = int((w_right - w_left) / 2)
+        x0_left = max(0, x0_left - expand_dist)
+        x1_left = x0_left + w_right
+        if x1_left >= w:
+            x1_left = w-1
+            x0_left = x1_left - w_right
+    else:
+        expand_dist = int((w_left - w_right) / 2)
+        x0_right = max(0, x0_right - expand_dist)
+        x1_right = x0_right + w_left
+        if x1_right >= w:
+            x1_right = w-1
+            x0_right = x1_right - w_left
+
+    '''
+    y 需要在同一水平线上
+    '''
+    y0_target = min(y0_left, y0_right)
+    y1_target = max(y1_left, y1_right)
+
+    y0_left = y0_target
+    y0_right = y0_target
+    y1_left = y1_target
+    y1_right = y1_target
+
+    print(x0_left, y0_target, x1_left, y1_target)
+    print(x0_right, y0_target, x1_right, y1_target)
+
+    cropped_image_left = left_nice[y0_left: y1_left, x0_left:x1_left]
+    cropped_image_right = right_nice[y0_right: y1_right, x0_right:x1_right]
+
+    return cropped_image_left, cropped_image_right, (x0_left, y0_left, x1_left, y1_left), (x0_right, y0_right, x1_right, y1_right)
+
 
 
 def get_mask(predictor, image, bbox = None, flag_points = False):
@@ -335,7 +386,7 @@ def getDepth_BP_CSBP(image_left, image_right, Q, flag_bp = True):
     return points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y
 
 
-def getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q):
+def getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q, disparity_left_minus_right = None):
     '''
     感觉可以不用灰度图进行计算 直接用彩色图像
     '''
@@ -348,9 +399,23 @@ def getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q):
 
     # dispL= stereo.compute(grayL,grayR)#.astype(np.float32)/ 16
     dispL= stereo.compute(image_left,image_right)
+    # print('dispL min: ', dispL.min())
+    # print('dispL max: ', dispL.max())
+    if disparity_left_minus_right is not None:
+        dispL = dispL + disparity_left_minus_right
+        # print('after disparity')
+        # print('dispL min: ', dispL.min())
+        # print('dispL max: ', dispL.max())
     points_depth, points_x, points_y = get_depth(dispL, Q, 16, True)
     # dispR= stereoR.compute(grayR,grayL)
     dispR = stereoR.compute(image_right, image_left)
+    # print('dispR min: ', dispR.min())
+    # print('dispR max: ', dispR.max())
+    if disparity_left_minus_right is not None:
+        dispR = dispR - disparity_left_minus_right
+        # print('after disparity')
+        # print('dispR min: ', dispR.min())
+        # print('dispR max: ', dispR.max())
 
 
     plt.figure(figsize=(10, 10))
@@ -420,6 +485,9 @@ def mask2target_shape(mask, target_shape):
 
     zero_map[start_h : (start_h+mask_h), start_w : (start_w+mask_w)] = mask
 
+    '''
+    之后整理代码的时候可以删掉 检测错误的
+    '''
     if np.sum(mask > 0) != np.sum(zero_map > 0):
         print('ERROR! mask2target_shape')
 
@@ -443,10 +511,31 @@ def cal_iou(mask_left, mask_right):
         return None
     else:
         return (np.sum(mask_left == mask_right) - zero_num) / total_num
+    
+
+def getOverlapNoDisparity(mask_left, mask_right, target_bbox_left, target_bbox_right, target_shape):
+    mask_left_cropped = cropped_mask_bbox(mask_left, target_bbox_left)
+    mask_right_cropped = cropped_mask_bbox(mask_right, target_bbox_right)
+    
+    left_shape = mask_left_cropped.shape
+    right_shape = mask_right_cropped.shape
+    mask_right_new = np.zeros(left_shape)
+    mask_right_new[0:min(left_shape[0], right_shape[0]), 0:min(left_shape[1], right_shape[1])] = mask_right_cropped[0:min(left_shape[0], right_shape[0]), 0:min(left_shape[1], right_shape[1])]
+
+    mask_add = mask_left_cropped + mask_right_new
+    mask_overlap = np.where(mask_add > 1.5, 1, 0)
+    
+    mask_return = np.zeros(target_shape)
+    mask_return[target_bbox_left[1]:target_bbox_left[3], target_bbox_left[0]:target_bbox_left[2]] = mask_overlap
+    return mask_return
+
+    
 
 
 def cropped_mask_bbox(mask, bbox):
     # bbox - xyxy
+    if mask is None or bbox is None:
+        return None
     x0_target, y0_target, x1_target, y1_target = bbox
     return mask[y0_target: y1_target, x0_target:x1_target]
 
@@ -526,15 +615,16 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 plt.show()
 
                 # start_time = time.time()
-
-                cropped_image_left, cropped_image_right, target_bbox = get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, right_nice)
+                '''
+                如果裁剪图像的xyxy坐标不同
+                '''
+                
                 mask_left = get_mask(predictor=predictor, image=left_nice, bbox=target_bbox_left)
                 mask_right = get_mask(predictor=predictor, image=right_nice, bbox=target_bbox_right)
+                mask_left = getMaxRegion(mask_left)
+                mask_right = getMaxRegion(mask_right)
 
                 iou_old = cal_iou(cropped_mask_bbox(mask_left, target_bbox_left), cropped_mask_bbox(mask_right, target_bbox_right))
-
-                y = y - target_bbox[1]
-                x = x - target_bbox[0]
 
                 # left mask
                 plt.figure(figsize=(10, 10))
@@ -566,6 +656,8 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                     print('iou before: ', iou_old)
                     mask_left = get_mask(predictor=predictor, image=left_nice, bbox=target_bbox_left, flag_points=True)
                     mask_right = get_mask(predictor=predictor, image=right_nice, bbox=target_bbox_right, flag_points=True)
+                    mask_left = getMaxRegion(mask_left)
+                    mask_right = getMaxRegion(mask_right)
 
                     iou_new = cal_iou(cropped_mask_bbox(mask_left, target_bbox_left), cropped_mask_bbox(mask_right, target_bbox_right))
 
@@ -589,21 +681,58 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                     
                     print('iou after: ', iou_new)
 
-                mask_left = cropped_mask_bbox(mask_left, target_bbox)
-                mask_right = cropped_mask_bbox(mask_right, target_bbox)
+                overlap_mask = getOverlapNoDisparity(mask_left, mask_right, target_bbox_left, target_bbox_right, mask_left.shape)
+                
+                plt.figure(figsize=(10, 10))
+                plt.imshow(left_nice)
+                show_mask(overlap_mask, plt.gca())
+                # show_box(target_bbox_left, plt.gca())
+                plt.title("overlap mask")
+                plt.axis('off')
+                plt.show()
 
                 if flag_edge_match: # 只进行边缘匹配
-                    mask_left = getMaxRegion(mask_left)
-                    mask_right = getMaxRegion(mask_right)
+                    # mask_left = getMaxRegion(mask_left)
+                    # mask_right = getMaxRegion(mask_right)
                     boundary_left = find_boundaries(mask_left, mode='inner').astype(np.uint8)
                     boundary_right = find_boundaries(mask_right, mode='inner').astype(np.uint8)
-                    cropped_image_left[boundary_left != 0] = 0 # 之前为0的结果居然蛮准的
-                    cropped_image_right[boundary_right != 0] = 0
+                    left_nice[boundary_left != 0] = 0 # 之前为0的结果居然蛮准的
+                    right_nice[boundary_right != 0] = 0
+                    overlap_boundary = getOverlapNoDisparity(boundary_left, boundary_right, target_bbox_left, target_bbox_right, boundary_left.shape)
+                    
+                    plt.figure(figsize=(10, 10))
+                    plt.imshow(left_nice)
+                    show_mask(overlap_boundary, plt.gca())
+                    # show_box(target_bbox_left, plt.gca())
+                    plt.title("overlap boundary")
+                    plt.axis('off')
+                    plt.show()
                     # image_left = np.where(boundary_left, cropped_image_left, 0)
                     # image_right = np.where(boundary_right, cropped_image_right, 0)
                 else: # cropped image匹配
                     boundary_left = None
                     boundary_right = None
+
+                flag_xyxy = False
+                if flag_xyxy:
+                    cropped_image_left, cropped_image_right, target_bbox_left_disparity, target_bbox_right_disparity = get_cropped_stereo_images_disparity(target_bbox_left, target_bbox_right, left_nice, right_nice)
+                    mask_left = cropped_mask_bbox(mask_left, target_bbox_left_disparity)
+                    mask_right = cropped_mask_bbox(mask_right, target_bbox_right_disparity)
+                    y = y - target_bbox_left_disparity[1]
+                    x = x - target_bbox_left_disparity[0]
+                    if flag_edge_match:
+                        overlap_boundary = cropped_mask_bbox(overlap_boundary, target_bbox_left_disparity)
+                    overlap_mask = cropped_mask_bbox(overlap_mask, target_bbox_left_disparity)
+                else:
+                    cropped_image_left, cropped_image_right, target_bbox = get_cropped_stereo_images(target_bbox_left, target_bbox_right, left_nice, right_nice)
+                    mask_left = cropped_mask_bbox(mask_left, target_bbox)
+                    mask_right = cropped_mask_bbox(mask_right, target_bbox)
+                    y = y - target_bbox[1]
+                    x = x - target_bbox[0]
+                    if flag_edge_match:
+                        overlap_boundary = cropped_mask_bbox(overlap_boundary, target_bbox)
+                    overlap_mask = cropped_mask_bbox(overlap_mask, target_bbox)
+
                 
                 image_left, image_right = cropped_image_left, cropped_image_right
                 print('image_left.shape: ', image_left.shape)
@@ -627,13 +756,36 @@ def mouseClick_bbox_disp(event,x,y,flags,param):
                 plt.axis('off')
                 plt.show()
 
+                 # left mask
+                if flag_edge_match:
+                    plt.figure(figsize=(10, 10))
+                    plt.imshow(image_left)
+                    show_mask(overlap_boundary, plt.gca())
+                    # show_box(target_bbox_left, plt.gca())
+                    plt.title("cropped overlap boundary")
+                    plt.axis('off')
+                    plt.show()
+
+                # right mask
+                if overlap_mask is not None:
+                    plt.figure(figsize=(10, 10))
+                    plt.imshow(image_left)
+                    show_mask(overlap_mask, plt.gca())
+                    # show_box(target_bbox_left, plt.gca())
+                    plt.title("cropped overlap mask")
+                    plt.axis('off')
+                    plt.show()
+
                 if flag_method == 0: # 采用SGBM + WLS Filter
                     '''
                     采用 overlap 区域进行计算
                     可能有的风险 overlap 区域为0 -- 此时返回左图
                     '''
-                    points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q)
-                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, getOverlapArea(boundary_left, boundary_right), getOverlapArea(mask_left, mask_right), image_left.shape, True)
+                    if flag_xyxy:
+                        points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q, target_bbox_left_disparity[0] - target_bbox_right_disparity[0]) # 去掉了最后一个 , target_bbox_left_disparity[0] - target_bbox_right_disparity[0]
+                    else:
+                        points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_stereoSGBM_WLSFilter(image_left, image_right, Q)
+                    Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, overlap_boundary if flag_edge_match else None, overlap_mask, image_left.shape, True)
                 elif flag_method == 1: # 采用方法Belief Propagation (BP) (CUDA)
                     points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y = getDepth_BP_CSBP(image_left, image_right, Q)
                     Depth_Print(y, x, points_depth, points_x, points_y, filtered_points_depth, filtered_points_x, filtered_points_y, flag_edge_match, boundary_left, mask_left, image_left.shape, True)
@@ -803,6 +955,12 @@ def get_StereoSGBM(image_w):
     window_size = 3
     min_disp = 0
     num_disp = math.floor(min(256-min_disp, image_w) / 16) * 16
+    '''
+    这个超参数需要再确定一下
+    '''
+    thred_disp = 10
+    if abs(num_disp - min(256-min_disp, image_w)) < thred_disp:
+        num_disp -= 16
 
     # 用SGBM算法获取视差图，即景深图
     # StereoSGBM的速度比StereoBM慢，但是精度更高，准确性更好
