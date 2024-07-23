@@ -7,12 +7,19 @@ class StereoConfig:
     '''
 
     '''
+    camera / pictures info
+    '''
+    flag_video = True # 使用 videos 还是 pics 进行测距
+    camera_id = 0 # 相机编号
+    pictures_left = None # 左图像的路径（列表）
+    pictures_right = None # 右图像的路径（列表）
+
+    '''
     image info
     '''
     id_image = 0 # 保存标定图片的开始序号
     image_width = 3040 # 视频流图像的宽度（两张一起）
     image_height = 1520 # 视频流图像的高度
-    camera_id = 0 # 相机编号
 
     '''
     checkboard info
@@ -43,3 +50,7 @@ class StereoConfig:
     mask_iou_thred = 0.5 # 计算两个 mask 是否相近 若不相近则加入背景点以得到更相近的 mask
     precision = 4 # mm
     target_window = 25 # 像素块边长
+    flag_rectify = True # 是否矫正图像 深度学习可能用不上
+    match_algorithm = 'SGBM' # 匹配算法
+    depth_method = 'reproject' # 视差图到深度图所用的方法 后续可添加多项式匹配
+    flag_edge_match = False # 是否应用边缘匹配算法
