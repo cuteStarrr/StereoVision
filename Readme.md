@@ -51,4 +51,4 @@ In file ```stereo_zoo.py```, class ```StereoSegmentationPredictor``` is used to 
 - ~~Use edges to determine feature points~~ (Quit, bad performance)
 - ~~add ```config``` file~~
 - ~~rewrite codes as class~~
-- check the correctness of calculate coords of x and y in cropped images (use standard cube or others, calculate its length)
+- ~~check the correctness of calculate coords of x and y in cropped images (use standard cube or others, calculate its length)~~
