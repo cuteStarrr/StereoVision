@@ -1,3 +1,12 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+import sys
+"""
+需要更改为自己的路径
+"""
+sys.path.append(r'C:\Data\Research\work\StereoVision\efficientvit')
+
+
 import numpy as np
 import cv2
 import math
@@ -145,8 +154,8 @@ class StereoObjectDetector:
     
     def get_detection_results(self, image):
         result = self.model(image, verbose = False)
-        bboxes = ((result[0].boxes.xyxy).int())
-        classids = ((result[0].boxes.cls).int())
+        bboxes = ((result[0].boxes.xyxy).int()).numpy()
+        classids = ((result[0].boxes.cls).int()).numpy()
 
         return bboxes, classids
 
@@ -213,9 +222,6 @@ class StereoObjectDetector:
         y1_target = max(y1_left, y1_right)
 
         # print(x0_target, y0_target, x1_target, y1_target)
-
-        self.cropped_image_left = self.image_left_rectified[y0_target: y1_target, x0_target:x1_target]
-        self.cropped_image_right = self.image_right_rectified[y0_target: y1_target, x0_target:x1_target]
 
         self.same_stereo_bbox = (x0_target, y0_target, x1_target, y1_target)
 
@@ -331,7 +337,7 @@ class StereoDepthEstimator:
         specific_area_points[np.isinf(specific_area_points) | np.isnan(specific_area_points)] = 0
         specific_area_points = specific_area_points[specific_area_points > 0] # 为了去掉负数的距离
 
-        if specific_area_points is None:
+        if specific_area_points is None or len(specific_area_points) == 0:
             print('In the specific area, no correct depth!')
             return None
         return specific_area_points.mean()
@@ -438,7 +444,7 @@ class StereoFeatureMatcher:
         if type == 'SGBM':
             h,w,c = self.image_left.shape
             self.get_stereoSGBM(w)
-            self.get_WLSFilter(self.stereo)
+            self.get_WLSFilter()
 
     
     def match(self):
