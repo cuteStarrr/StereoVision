@@ -1,7 +1,7 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import sys
-sys.path.append(r'D:\Code\StereoDepthEstimation\StereoVision\efficientvit')
+sys.path.append(r'C:\Data\Research\work\StereoVision\efficientvit')
 
 from efficientvit.sam_model_zoo import create_sam_model
 from efficientvit.models.efficientvit.sam import EfficientViTSamPredictor
@@ -392,12 +392,12 @@ def torch_cuda():
 
 
 def getQ_matlab():
-    MRS = np.array([[1542.8, 0.3707, 950.1], [0, 1542.6, 819.6], [0, 0, 1]]) # K 矩阵
-    MLS = np.array([[1556.8, -0.2483, 807.2], [0, 1556.2, 823.1], [0, 0, 1]])
-    dRS = np.array([-0.0550, 0.2772, 0.00014, -0.0010, -0.3782]) # stereoParams.CameraParameters1.Distortion
-    dLS = np.array([-0.0739, 0.3643, 0.00017, -0.00027, -0.5756])
-    R = np.array([[0.9999, -0.0018, -0.0124], [0.0018, 1, -0.0022], [0.0124, 0.0022, 0.9999]]) # stereoParams.PoseCamera2
-    T = np.array([[-159.7378], [-0.0879], [0.1531]]) # stereoParams.PoseCamera2
+    MRS = np.array([[1621.1, 0, 733.1593], [0, 1622.1, 770.0905], [0, 0, 1]]) # K 矩阵
+    MLS = np.array([[1632.6, 0, 680.0238], [0, 1634.5, 760.4863], [0, 0, 1]])
+    dRS = np.array([-0.0705, 0.3503, 0.00090128, -0.00043483, -0.4974]) # stereoParams.CameraParameters1.Distortion
+    dLS = np.array([-0.0511, 0.1970, 0.00015796, -0.00027453, -0.1743]) # k1, k2, p1, p2, k3  stereoParams.CameraParameters1.RadialDistortion stereoParams.CameraParameters1.TangentialDistortion
+    R = np.array([[1, 0.000088495, 0.0044], [-0.00010095, 1, 0.0028], [-0.0044, -0.0028, 1]]) # stereoParams.PoseCamera2
+    T = np.array([[-59.1219], [0.9568], [-0.2500]]) # stereoParams.PoseCamera2
     rectify_scale= 0
     shape = (1520,1520)
     RL, RR, PL, PR, Q, roiL, roiR= cv2.stereoRectify(MLS, dLS, MRS, dRS,
@@ -408,7 +408,7 @@ def getQ_matlab():
     Right_Stereo_Map= cv2.initUndistortRectifyMap(MRS, dRS, RR, PR,
                                                 shape[::-1], cv2.CV_32FC1)
     
-    save_folder = r"D:\Code\StereoDepthEstimation\StereoVision\results" # 存放相机参数目录
+    save_folder = r"C:\Data\Research\work\StereoVision\results" # 存放相机参数目录
     left_map_file=os.path.join(save_folder, 'Left_Stereo_Map.npz')
     right_map_file=os.path.join(save_folder, 'Right_Stereo_Map.npz')
     Q_file=os.path.join(save_folder, 'Q.npy')

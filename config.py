@@ -9,7 +9,7 @@ class StereoConfig:
     '''
     camera / pictures info
     '''
-    flag_video = True # 使用 videos 还是 pics 进行测距
+    flag_video = True # 使用 videos 还是 pictures 进行测距
     camera_id = 0 # 相机编号
     pictures_left = None # 左图像的路径（列表）
     pictures_right = None # 右图像的路径（列表）
@@ -26,9 +26,9 @@ class StereoConfig:
     '''
     checkerboard_long = 11 # 标定板的宽度上有多少个角点
     checkerboard_short = 8 # # 标定板的高度上有多少个角点
-    checker_size = 15 # 方格边长15mm 
+    checker_size = 45 # 方格边长
     checkerboard_start_num = 0 # 标定图片的开始序号
-    checkerboard_end_num = 99 # 标定图片的结束序号
+    checkerboard_end_num = 79 # 标定图片的结束序号
 
     '''
     path

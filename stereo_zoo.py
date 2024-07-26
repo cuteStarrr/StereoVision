@@ -237,6 +237,9 @@ class StereoDepthEstimator:
         '''
 
         self.config = config
+
+        self.last_click_point = None
+        self.click_depth_list = []
         # camera id
         if config.flag_video:
             self.camera = cv2.VideoCapture(config.camera_id)
@@ -346,6 +349,15 @@ class StereoDepthEstimator:
         print("y: ", y, "x: ", x, "Distance using filter: ", self.depth_map[y,x])
         print("y: ", y, "x: ", x, "x using filter: ", self.coords_x[y,x])
         print("y: ", y, "x: ", x, "y using filter: ", self.coords_y[y,x])
+
+        # print the distance to last click point
+        if self.last_click_point is not None:
+            dist = np.sqrt((self.depth_map[y,x] - self.last_click_point[0]) ** 2 + (self.coords_x[y,x] - self.last_click_point[1]) ** 2 + (self.coords_y[y,x] - self.last_click_point[2]) ** 2)
+            print("The distance to the last click point: ", dist)
+            self.click_depth_list.append(dist)
+            print("The average click distance to the last click point: ", np.mean(self.click_depth_list))
+            
+        self.last_click_point = (self.depth_map[y,x], self.coords_x[y,x], self.coords_y[y,x])
 
         h,w = self.depth_map.shape
         window = np.zeros((h,w))

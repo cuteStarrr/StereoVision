@@ -5,7 +5,7 @@ from config import StereoConfig
 
 
 
-def calibration(camera_id, image_width, image_height, checkerboard_long, checkerboard_short, pics_folder, criteria):
+def calibration(camera_id, image_width, image_height, checkerboard_long, checkerboard_short, pics_folder, criteria, id_image):
     print('Starting the Calibration. Press and maintain the space bar to exit the script\n')
     print('Push (s) to save the image you want and push (c) to see next frame without saving the image')
 
@@ -16,7 +16,7 @@ def calibration(camera_id, image_width, image_height, checkerboard_long, checker
     # Call the two cameras 
     camera = cv2.VideoCapture(camera_id)
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, image_width)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, image_height)  
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, image_height)
 
     while True:
         ret, frame = camera.read()
@@ -73,4 +73,4 @@ def calibration(camera_id, image_width, image_height, checkerboard_long, checker
 
 
 if __name__ == '__main__':
-    calibration(StereoConfig.camera_id, StereoConfig.image_width, StereoConfig.image_height, StereoConfig.checkerboard_long, StereoConfig.checkerboard_short, StereoConfig.pics_folder, StereoConfig.criteria)
+    calibration(StereoConfig.camera_id, StereoConfig.image_width, StereoConfig.image_height, StereoConfig.checkerboard_long, StereoConfig.checkerboard_short, StereoConfig.pics_folder, StereoConfig.criteria, StereoConfig.id_image)
