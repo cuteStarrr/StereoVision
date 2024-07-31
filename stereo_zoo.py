@@ -28,7 +28,7 @@ from config import StereoConfig
 
 
 '''
-1. 裁剪之后计算的 xy 坐标可能有误
+1. 裁剪之后计算的 xy 坐标可能有误 -- 感觉应该没有问题
 '''
 
 def crop_by_bbox(image, bbox):
@@ -239,7 +239,9 @@ class StereoDepthEstimator:
         self.config = config
 
         self.last_click_point = None
+        self.last_click_point_average = None
         self.click_depth_list = []
+        self.click_depth_list_average = []
         # camera id
         if config.flag_video:
             self.camera = cv2.VideoCapture(config.camera_id)
@@ -331,7 +333,7 @@ class StereoDepthEstimator:
         Filter: WLSFilter
         '''
         self.matcher = StereoFeatureMatcher(type=self.config.match_algorithm, image_left=image_left, image_right=image_right)
-        self.matcher.match()
+        self.matcher.match(self.config.precision)
         self.depth_map, self.coords_x, self.coords_y = self.get_depthmap_from_disparity(self.matcher.disp_filtered, self.config.depth_method)
 
 
@@ -362,7 +364,23 @@ class StereoDepthEstimator:
         h,w = self.depth_map.shape
         window = np.zeros((h,w))
         window[max(y-self.config.target_window, 0):min(y+self.config.target_window, h), max(x-self.config.target_window, 0):min(x+self.config.target_window, w)] = 1
-        print("depth using window: ", self.get_specific_area_depth(self.depth_map, window))
+        window = np.where(self.confidence_map_cropped > 0.5, window, 0)
+
+        current_depth_average = self.get_specific_area_depth(self.depth_map, window)
+        current_x_average = self.get_specific_area_depth(self.coords_x, window)
+        current_y_average = self.get_specific_area_depth(self.coords_y, window)
+        print("depth using window: ", current_depth_average)
+        print("x using window: ", current_x_average)
+        print("y using window: ", current_y_average)
+
+        # print the distance to last click point -- average using window
+        if self.last_click_point_average is not None:
+            dist = np.sqrt((current_depth_average - self.last_click_point_average[0]) ** 2 + (current_x_average - self.last_click_point_average[1]) ** 2 + (current_y_average - self.last_click_point_average[2]) ** 2)
+            print("The distance to the last click point (average by window): ", dist)
+            self.click_depth_list_average.append(dist)
+            print("The average click distance to the last click point: ", np.mean(self.click_depth_list_average))
+            
+        self.last_click_point_average = (current_depth_average, current_x_average, current_y_average)
         
         if self.flag_no_target is False:
             if self.config.flag_edge_match:
@@ -395,15 +413,16 @@ class StereoDepthEstimator:
                 # use overlap mask or boundary to match
                 # crop the left and right image of the same size -- accurate cropping has bad performance
                 mask_left, mask_right = self.segment_predictor.get_stereo_mask(image_left=self.image_left_rectified, image_right=self.image_right_rectified, bbox_left=target_bbox_left, bbox_right=target_bbox_right)
+                # there are two bboxes, should be cropped
+                same_stereo_bbox = self.object_detector.get_same_stereo_bbox()
                 if mask_left is None or mask_right is None:
-                    # no mask, calculate depth using cropped image
+                    # no mask, calculate depth using cropped image (cropped by the same bbox)
                     self.flag_no_target = True
-                    self.calculate_depth_map(crop_by_bbox(self.image_left_rectified, target_bbox_left), crop_by_bbox(self.image_right_rectified, target_bbox_right))
+                    self.calculate_depth_map(crop_by_bbox(self.image_left_rectified, same_stereo_bbox), crop_by_bbox(self.image_right_rectified, same_stereo_bbox))
+                    self.confidence_map_cropped = crop_by_bbox(self.matcher.confidence_map, same_stereo_bbox)
                     self.print_depth(x, y)
                     return
 
-                # there are masks, should be cropped
-                same_stereo_bbox = self.object_detector.get_same_stereo_bbox()
                 y = y - same_stereo_bbox[1]
                 x = x - same_stereo_bbox[0]
                 if not self.config.flag_edge_match:
@@ -423,6 +442,8 @@ class StereoDepthEstimator:
 
                 self.flag_no_target = False
                 self.calculate_depth_map(crop_by_bbox(self.image_left_rectified, same_stereo_bbox), crop_by_bbox(self.image_right_rectified, same_stereo_bbox))
+                self.confidence_map_cropped = crop_by_bbox(self.matcher.confidence_map, same_stereo_bbox)
+                specific_area = np.where(self.confidence_map_cropped > 0.5, specific_area, 0)
                 self.print_depth(x, y, specific_area)
 
 
@@ -459,12 +480,13 @@ class StereoFeatureMatcher:
             self.get_WLSFilter()
 
     
-    def match(self):
+    def match(self, precision):
         self.dispL= self.stereo.compute(self.image_left, self.image_right)
         self.dispR = self.stereoR.compute(self.image_right, self.image_left)
         self.disp_filtered = self.wls_filter.filter(disparity_map_left=self.dispL, left_view=self.image_left, filtered_disparity_map=None, disparity_map_right=self.dispR, right_view=self.image_right)
+        self.confidence_map = np.where(np.abs(self.disp_filtered - self.dispL) < precision, 1, 0)
 
-        return self.disp_filtered
+        return self.disp_filtered, self.confidence_map
 
 
     def get_WLSFilter(self):

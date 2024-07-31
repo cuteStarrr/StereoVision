@@ -48,7 +48,7 @@ class StereoConfig:
     criteria =(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     criteria_stereo= (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     mask_iou_thred = 0.5 # 计算两个 mask 是否相近 若不相近则加入背景点以得到更相近的 mask
-    precision = 4 # mm
+    precision = 100 # mm
     target_window = 25 # 像素块边长
     flag_rectify = True # 是否矫正图像 深度学习可能用不上
     match_algorithm = 'SGBM' # 匹配算法
