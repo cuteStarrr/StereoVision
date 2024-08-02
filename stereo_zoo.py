@@ -364,8 +364,12 @@ class StereoDepthEstimator:
         h,w = self.depth_map.shape
         window = np.zeros((h,w))
         window[max(y-self.config.target_window, 0):min(y+self.config.target_window, h), max(x-self.config.target_window, 0):min(x+self.config.target_window, w)] = 1
-        window = np.where(self.confidence_map_cropped > 0.5, window, 0)
+        window = np.where(self.matcher.confidence_map > 0.5, window, 0)
 
+        '''
+        这里 y 总是 None 因此无法用 window 的平均来计算长度
+        算法应该还需要再改进
+        '''
         current_depth_average = self.get_specific_area_depth(self.depth_map, window)
         current_x_average = self.get_specific_area_depth(self.coords_x, window)
         current_y_average = self.get_specific_area_depth(self.coords_y, window)
@@ -404,6 +408,7 @@ class StereoDepthEstimator:
             if target_bbox_left is None or target_bbox_right is None:
                 self.flag_no_target = True
                 self.calculate_depth_map(self.image_left_rectified, self.image_right_rectified)
+                # self.confidence_map_cropped = self.matcher.confidence_map
                 self.print_depth(x, y)
             else:
                 # detect target in both images!
@@ -419,7 +424,7 @@ class StereoDepthEstimator:
                     # no mask, calculate depth using cropped image (cropped by the same bbox)
                     self.flag_no_target = True
                     self.calculate_depth_map(crop_by_bbox(self.image_left_rectified, same_stereo_bbox), crop_by_bbox(self.image_right_rectified, same_stereo_bbox))
-                    self.confidence_map_cropped = crop_by_bbox(self.matcher.confidence_map, same_stereo_bbox)
+                    # self.confidence_map_cropped = self.matcher.confidence_map
                     self.print_depth(x, y)
                     return
 
@@ -442,8 +447,8 @@ class StereoDepthEstimator:
 
                 self.flag_no_target = False
                 self.calculate_depth_map(crop_by_bbox(self.image_left_rectified, same_stereo_bbox), crop_by_bbox(self.image_right_rectified, same_stereo_bbox))
-                self.confidence_map_cropped = crop_by_bbox(self.matcher.confidence_map, same_stereo_bbox)
-                specific_area = np.where(self.confidence_map_cropped > 0.5, specific_area, 0)
+                # self.confidence_map_cropped = self.matcher.confidence_map
+                specific_area = np.where(self.matcher.confidence_map > 0.5, specific_area, 0)
                 self.print_depth(x, y, specific_area)
 
 
@@ -451,15 +456,25 @@ class StereoDepthEstimator:
     def show_interact_depth(self):
         while True:
             self.get_frames(self.config.flag_rectify)
-            if self.image_left_rectified is None or self.image_right_rectified is None:
-                break
+            while True:
+                if self.image_left_rectified is None or self.image_right_rectified is None:
+                    break
+                
+                cv2.namedWindow('Left image after rectified', cv2.WINDOW_FREERATIO)
+                cv2.imshow('Left image after rectified', self.image_left_rectified)
+                cv2.resizeWindow('Left image after rectified', 1520, 1520)
+                # cv2.imshow('Left image after rectified', self.image_left_rectified)
 
-            cv2.imshow('Left image after rectified', self.image_left_rectified)
+                cv2.setMouseCallback('Left image after rectified', self.calculate_depth_map_withclick, None)
 
-            cv2.setMouseCallback('Left image after rectified', self.calculate_depth_map_withclick, None)
+                if cv2.waitKey(1) & 0xFF == ord(' '):
+                    break
+
+                if self.config.flag_video:
+                    break
 
             if cv2.waitKey(1) & 0xFF == ord(' '):
-                break
+                    break
         
 
         if self.config.flag_video:

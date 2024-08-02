@@ -9,10 +9,10 @@ class StereoConfig:
     '''
     camera / pictures info
     '''
-    flag_video = True # 使用 videos 还是 pictures 进行测距
+    flag_video = False # 使用 videos 还是 pictures 进行测距
     camera_id = 0 # 相机编号
-    pictures_left = None # 左图像的路径（列表）
-    pictures_right = None # 右图像的路径（列表）
+    pictures_left = [r'C:\Data\Research\work\StereoVision\test_pics\standard_cube_light\left_image\testimage-L0.png', r'C:\Data\Research\work\StereoVision\test_pics\standard_cube_light\left_image\testimage-L36.png', r'C:\Data\Research\work\StereoVision\test_pics\standard_cube_light\left_image\testimage-L27.png'] # 左图像的路径（列表）
+    pictures_right = [r'C:\Data\Research\work\StereoVision\test_pics\standard_cube_light\right_image\testimage-R0.png', r'C:\Data\Research\work\StereoVision\test_pics\standard_cube_light\right_image\testimage-R36.png', r'C:\Data\Research\work\StereoVision\test_pics\standard_cube_light\right_image\testimage-R27.png'] # 右图像的路径（列表）
 
     '''
     image info
@@ -28,13 +28,13 @@ class StereoConfig:
     checkerboard_short = 8 # # 标定板的高度上有多少个角点
     checker_size = 45 # 方格边长
     checkerboard_start_num = 0 # 标定图片的开始序号
-    checkerboard_end_num = 79 # 标定图片的结束序号
+    checkerboard_end_num = 90 # 标定图片的结束序号
 
     '''
     path
     '''
     # weight_path_yolo = r"D:\Code\StereoDepthEstimation\weights\yolov8n.pt" # yolo的权重地址
-    pics_folder = r"C:\Data\Research\work\StereoVision\checkerboard" # 拍照文件目录
+    pics_folder = r"C:\Data\Research\work\StereoVision\test_pics\checkboard_light" # 拍照文件目录
     save_folder = r"C:\Data\Research\work\StereoVision\results" # 存放相机参数目录
     left_map_file = os.path.join(save_folder, 'Left_Stereo_Map.npz')
     right_map_file = os.path.join(save_folder, 'Right_Stereo_Map.npz')
@@ -48,7 +48,7 @@ class StereoConfig:
     criteria =(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     criteria_stereo= (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     mask_iou_thred = 0.5 # 计算两个 mask 是否相近 若不相近则加入背景点以得到更相近的 mask
-    precision = 100 # mm
+    precision = 50 # mm
     target_window = 25 # 像素块边长
     flag_rectify = True # 是否矫正图像 深度学习可能用不上
     match_algorithm = 'SGBM' # 匹配算法

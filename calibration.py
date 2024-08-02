@@ -129,5 +129,5 @@ def take_stereo_pairs(camera_id, image_width, image_height, pics_folder_left, pi
 
 
 if __name__ == '__main__':
-    calibration(StereoConfig.camera_id, StereoConfig.image_width, StereoConfig.image_height, StereoConfig.checkerboard_long, StereoConfig.checkerboard_short, StereoConfig.pics_folder, StereoConfig.criteria, StereoConfig.id_image)
-    take_stereo_pairs(camera_id=StereoConfig.camera_id, image_width=StereoConfig.image_width, image_height=StereoConfig.image_height, pics_folder_left=r'C:\Data\Research\work\StereoVision\test_pics\stereo_pairs\left_image', pics_folder_right='C:\Data\Research\work\StereoVision\test_pics\stereo_pairs\right_image', id_image=0)
+    # calibration(StereoConfig.camera_id, StereoConfig.image_width, StereoConfig.image_height, StereoConfig.checkerboard_long, StereoConfig.checkerboard_short, StereoConfig.pics_folder, StereoConfig.criteria, StereoConfig.id_image)
+    take_stereo_pairs(camera_id=StereoConfig.camera_id, image_width=StereoConfig.image_width, image_height=StereoConfig.image_height, pics_folder_left=r'C:\Data\Research\work\StereoVision\test_pics\checkboard_dark\left_image', pics_folder_right=r'C:\Data\Research\work\StereoVision\test_pics\checkboard_dark\right_image', id_image=0)

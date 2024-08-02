@@ -392,12 +392,40 @@ def torch_cuda():
 
 
 def getQ_matlab():
-    MRS = np.array([[1621.1, 0, 733.1593], [0, 1622.1, 770.0905], [0, 0, 1]]) # K 矩阵
-    MLS = np.array([[1632.6, 0, 680.0238], [0, 1634.5, 760.4863], [0, 0, 1]])
-    dRS = np.array([-0.0705, 0.3503, 0.00090128, -0.00043483, -0.4974]) # stereoParams.CameraParameters1.Distortion
-    dLS = np.array([-0.0511, 0.1970, 0.00015796, -0.00027453, -0.1743]) # k1, k2, p1, p2, k3  stereoParams.CameraParameters1.RadialDistortion stereoParams.CameraParameters1.TangentialDistortion
-    R = np.array([[1, 0.000088495, 0.0044], [-0.00010095, 1, 0.0028], [-0.0044, -0.0028, 1]]) # stereoParams.PoseCamera2
-    T = np.array([[-59.1219], [0.9568], [-0.2500]]) # stereoParams.PoseCamera2
+    '''
+    水下2.5m距离大标定板在室内自然光下的标定数据
+    MRS = np.array([[1934.7, 0, 725.6832], [0, 1938.0, 781.5751], [0, 0, 1]]) # K 矩阵
+    MLS = np.array([[1943.6, 0, 672.7804], [0, 1947.6, 774.4734], [0, 0, 1]])
+    dRS = np.array([0.2418, 0.7233, 0.0013, -0.0034, -0.6775]) # stereoParams.CameraParameters1.Distortion
+    dLS = np.array([0.2853, 0.1056, 0.0020, -0.0026, 1.9448]) # k1, k2, p1, p2, k3  stereoParams.CameraParameters1.RadialDistortion stereoParams.CameraParameters1.TangentialDistortion
+    R = np.array([[1, 0.000019786, 0.0041], [-0.0000012063, 1, 0.0045], [-0.0041, -0.0045, 1]]) # stereoParams.PoseCamera2
+    T = np.array([[-58.9142], [-0.1065], [-3.3233]]) # stereoParams.PoseCamera2
+
+    水下2.5m距离大标定板在黑暗环境中水下开灯的标定数据
+    MRS = np.array([[2092.5, 0, 736.3271], [0, 2095.7, 756.8750], [0, 0, 1]]) # K 矩阵
+    MLS = np.array([[2123.8, 0, 672.1107], [0, 2127.3, 749.1917], [0, 0, 1]])
+    dRS = np.array([0.3299, 0.2741, -0.0021, -0.0016, 3.4986]) # stereoParams.CameraParameters1.Distortion
+    dLS = np.array([0.3981, -0.7158, -0.0016, -0.0046, 9.1243]) # k1, k2, p1, p2, k3  stereoParams.CameraParameters1.RadialDistortion stereoParams.CameraParameters1.TangentialDistortion
+    R = np.array([[1, -0.0000051255, 0.0008313], [-0.0000009734, 1, 0.0050], [-0.00083132, -0.0050, 1]]) # stereoParams.PoseCamera2
+    T = np.array([[-64.8455], [-2.6279], [-20.5164]]) # stereoParams.PoseCamera2
+
+    以上两种情况都能准确测距和长度 -- 只是依赖合适的点
+    下面这种情况距离和长度都错误 -- 2.2m 的距离算出来3.5m左右
+
+    水下2.5m距离大标定板在室内自然光环境中水下开灯的标定数据
+    MRS = np.array([[1962.1, 0, 730.6363], [0, 1964.8, 790.2402], [0, 0, 1]]) # K 矩阵
+    MLS = np.array([[1975.8, 0, 689.1285], [0, 1979.1, 781.9245], [0, 0, 1]])
+    dRS = np.array([0.2523, 0.6605, 0.0030, -0.0036, 1.1795]) # stereoParams.CameraParameters1.Distortion
+    dLS = np.array([0.3219, -0.5154, 0.0042, 0.00094055, 7.6053]) # k1, k2, p1, p2, k3  stereoParams.CameraParameters1.RadialDistortion stereoParams.CameraParameters1.TangentialDistortion
+    R = np.array([[1, -0.0000051255, 0.0008313], [-0.0000009734, 1, 0.0050], [-0.00083132, -0.0050, 1]]) # stereoParams.PoseCamera2
+    T = np.array([[-64.8455], [-2.6279], [-20.5164]]) # stereoParams.PoseCamera2
+    '''
+    MRS = np.array([[1962.1, 0, 730.6363], [0, 1964.8, 790.2402], [0, 0, 1]]) # K 矩阵
+    MLS = np.array([[1975.8, 0, 689.1285], [0, 1979.1, 781.9245], [0, 0, 1]])
+    dRS = np.array([0.2523, 0.6605, 0.0030, -0.0036, 1.1795]) # stereoParams.CameraParameters1.Distortion
+    dLS = np.array([0.3219, -0.5154, 0.0042, 0.00094055, 7.6053]) # k1, k2, p1, p2, k3  stereoParams.CameraParameters1.RadialDistortion stereoParams.CameraParameters1.TangentialDistortion
+    R = np.array([[1, -0.0000051255, 0.0008313], [-0.0000009734, 1, 0.0050], [-0.00083132, -0.0050, 1]]) # stereoParams.PoseCamera2
+    T = np.array([[-64.8455], [-2.6279], [-20.5164]]) # stereoParams.PoseCamera2
     rectify_scale= 0
     shape = (1520,1520)
     RL, RR, PL, PR, Q, roiL, roiR= cv2.stereoRectify(MLS, dLS, MRS, dRS,
